@@ -1,17 +1,19 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox } from "../types.js";
+import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox, type PolicyOptions } from "../types.js";
 import { collectPageFindings } from "./detect.js";
 import { generateHtmlReport } from "./report.js";
 import { generateAgentFixesMarkdown } from "./agentFixes.js";
 import { loadConfig, applyIgnoreRules } from "../config.js";
+import { evaluatePolicy } from "../policy.js";
 
 export type ScanOptions = {
   url: string;
   outDir: string;
   viewports?: typeof VIEWPORTS;
   configPath?: string;
+  policy?: PolicyOptions;
 };
 
 function normalizeUrl(input: string): string {
@@ -347,6 +349,14 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
       }
     : undefined;
 
+  let policyDecision: ScanReport["policy"] | undefined;
+  if (opts.policy) {
+    policyDecision = evaluatePolicy(summary, opts.policy);
+  } else {
+    // default policy for backwards compat: fail on error
+    policyDecision = evaluatePolicy(summary, { failOn: "error" });
+  }
+
   const report: ScanReport = {
     url,
     timestamp,
@@ -355,6 +365,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     findings: allFindings,
     summary,
     suppression,
+    policy: policyDecision,
   };
 
   await writeFile(path.join(outDir, "findings.json"), JSON.stringify(report, null, 2), "utf-8");

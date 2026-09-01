@@ -31,6 +31,9 @@ Options:
                              Built-ins: mobile (390×844), tablet (768×1024), desktop (1440×900)
                              Custom:    390x844,768x1024  or  mobile,desktop
   --config <path>            Path to .framecritic.json (default: ./.framecritic.json if present)
+  --fail-on <mode>           CI gate: error|warning|never (default: error)
+  --max-warnings <n>         Max warnings allowed before failing (default: no limit; 0 = no warnings)
+  --json-summary             Emit machine-readable JSON summary to stdout and file
   --open                     Open report.html in default browser after scan
   -h, --help                 Show this help
   -v, --version              Show version
@@ -41,12 +44,24 @@ Examples:
   framecritic scan http://localhost:3001 --open
   framecritic scan https://example.com --viewport 390x844,1440x900
   framecritic scan http://localhost:3001 --config ./my-config.json
+  framecritic scan http://localhost:3001 --fail-on warning --max-warnings 5 --json-summary
 
 Detectors:
   horizontal-overflow · outside-viewport · overlapping-elements · broken-image · console/page errors
 
 Config (.framecritic.json):
   { "ignore": { "selectors": [], "types": [], "viewports": { "mobile": [], "tablet": [], "desktop": [] } } }
+
+Exit codes:
+  0  pass (policy satisfied)
+  1  scan or config error
+  2  policy failure (fail-on threshold exceeded)
+
+Policy:
+  --fail-on error   fail if any error
+  --fail-on warning fail if any error or warning (or warnings > max-warnings)
+  --fail-on never   never fail (exit 0)
+  --max-warnings N  fail if warnings > N (checked after fail-on)
 `);
 }
 
@@ -95,10 +110,17 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
   if (report.suppression?.configPath) {
     console.log(formatSummaryLine("Config:", report.suppression.configPath, "dim"));
   }
+  if (report.policy) {
+    const pol = report.policy.failOn + (report.policy.maxWarnings !== undefined ? `, max-warnings=${report.policy.maxWarnings}` : "");
+    console.log(formatSummaryLine("Policy:", `${pol} → ${report.policy.failed ? "FAIL" : "PASS"} (${report.policy.reason})`, report.policy.failed ? "red" : "green"));
+  }
   console.log("");
   console.log(`  ${statusColor === "red" ? "\x1b[31m✕\x1b[0m" : statusColor === "yellow" ? "\x1b[33m▲\x1b[0m" : "\x1b[32m✓\x1b[0m"} ${status} — ${summary.errors} error${summary.errors === 1 ? "" : "s"}, ${summary.warnings} warning${summary.warnings === 1 ? "" : "s"} · ${affected}/${results.length} viewports affected`);
   if (report.suppression && report.suppression.totalSuppressed > 0) {
     console.log(`  suppressed ${report.suppression.totalSuppressed} finding(s) via config`);
+  }
+  if (report.policy) {
+    console.log(`  policy ${report.policy.failed ? "FAILED" : "PASSED"} — ${report.policy.reason} (exit ${report.policy.exitCode})`);
   }
   console.log("");
 
@@ -136,8 +158,14 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
   console.log(`  findings.json  → ${path.join(outDir, "findings.json")}`);
   console.log(`  report.html    → ${path.join(outDir, "report.html")}`);
   console.log(`  AGENT_FIXES.md → ${path.join(outDir, "AGENT_FIXES.md")}`);
+  if (report.policy) {
+    console.log(`  policy: fail-on=${report.policy.failOn}${report.policy.maxWarnings !== undefined ? ` max-warnings=${report.policy.maxWarnings}` : ""} → ${report.policy.failed ? "FAIL" : "PASS"}`);
+  }
   console.log("");
-  if (hasErrors) {
+  if (report.policy?.failed) {
+    console.log(`  CI gate FAILED — exit ${report.policy.exitCode}`);
+    console.log("");
+  } else if (hasErrors) {
     console.log(`  Next: open report.html in a browser (or re-run with --open) to see annotated regions.`);
     console.log("");
   }
@@ -185,15 +213,42 @@ if (isMain) {
   }
   console.log(`[FrameCritic] Output → ${outDir}`);
 
+  const policyOpts = {
+    failOn: parsed.failOn ?? "error" as const,
+    maxWarnings: parsed.maxWarnings,
+  };
+
   let report: Awaited<ReturnType<typeof scanUrl>>;
   try {
-    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config });
+    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config, policy: policyOpts });
   } catch (e: any) {
     console.error(`\n[FrameCritic] Scan failed: ${e?.message ?? String(e)}`);
     process.exit(1);
   }
 
+  // write json-summary file if requested and also ensure policy already in findings.json
+  let jsonSummaryObj: Record<string, unknown> | null = null;
+  if (parsed.jsonSummary) {
+    jsonSummaryObj = {
+      url: report.url,
+      timestamp: report.timestamp,
+      outDir,
+      summary: report.summary,
+      policy: report.policy,
+      suppression: report.suppression ?? null,
+      exitCode: report.policy?.exitCode ?? 0,
+    };
+    try {
+      fs.writeFileSync(path.join(outDir, "json-summary.json"), JSON.stringify(jsonSummaryObj, null, 2), "utf-8");
+    } catch {}
+  }
+
   printSummary(report, outDir);
+
+  if (parsed.jsonSummary && jsonSummaryObj) {
+    console.log("  --json-summary");
+    console.log(JSON.stringify(jsonSummaryObj));
+  }
 
   if (parsed.open) {
     const htmlPath = path.join(outDir, "report.html");
@@ -201,6 +256,6 @@ if (isMain) {
     openInBrowser(htmlPath);
   }
 
-  if (report.summary.errors > 0) process.exit(2);
-  else process.exit(0);
+  const exitCode = report.policy?.exitCode ?? (report.summary.errors > 0 ? 2 : 0);
+  process.exit(exitCode);
 }

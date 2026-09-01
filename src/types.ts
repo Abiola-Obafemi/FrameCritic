@@ -54,6 +54,19 @@ export type SuppressionSummary = {
   configPath: string | null;
 };
 
+export type PolicyOptions = {
+  failOn: "error" | "warning" | "never";
+  maxWarnings?: number;
+};
+
+export type PolicyDecision = {
+  failOn: "error" | "warning" | "never";
+  maxWarnings?: number;
+  failed: boolean;
+  reason: string;
+  exitCode: number;
+};
+
 export type ScanReport = {
   url: string;
   timestamp: string;
@@ -62,4 +75,5 @@ export type ScanReport = {
   findings: Finding[]; // flattened kept findings
   summary: { total: number; errors: number; warnings: number; infos: number };
   suppression?: SuppressionSummary;
+  policy?: PolicyDecision;
 };

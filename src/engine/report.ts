@@ -247,13 +247,15 @@ export function generateHtmlReport(report: ScanReport): string {
     <div class="stat"><div class="k">Warnings</div><div class="v" style="color:var(--warn)">${summary.warnings}</div><div class="sub">${affectedViewports}/${totalViewports} viewports affected</div></div>
     <div class="stat"><div class="k">Infos</div><div class="v" style="color:var(--info)">${summary.infos}</div></div>
   </div>
+  ${report.policy ? `<div role="note" aria-label="Policy decision" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid ${report.policy.failed ? "#4a1e2e" : "#1a4a2e"};background:${report.policy.failed ? "#2a1320" : "#0f2a1a"};color:${report.policy.failed ? "var(--err)" : "var(--ok)"};font-size:12px;font-weight:600">Policy: fail-on=${esc(report.policy.failOn)}${report.policy.maxWarnings !== undefined ? `, max-warnings=${report.policy.maxWarnings}` : ""} → ${report.policy.failed ? "FAIL" : "PASS"} — ${esc(report.policy.reason)} (exit ${report.policy.exitCode})</div>` : ``}
   <div class="compact">
     <span class="compact-pill err"><strong>${summary.errors}</strong> errors</span>
     <span class="compact-pill warn"><strong>${summary.warnings}</strong> warnings</span>
     <span class="compact-pill vp"><strong>${affectedViewports}/${totalViewports}</strong> viewports affected${affectedByErrors ? ` · ${affectedByErrors} with errors` : ""}</span>
     ${suppressedCount ? `<span class="compact-pill" style="color:#9aa3b8;border-style:dashed"><strong>${suppressedCount}</strong> suppressed</span>` : ``}
+    ${report.policy ? `<span class="compact-pill" style="border-color:${report.policy.failed ? "#4a1e2e" : "#1a4a2e"};color:${report.policy.failed ? "var(--err)" : "var(--ok)"}"><strong>policy ${report.policy.failed ? "FAIL" : "PASS"}</strong></span>` : ``}
   </div>
-  <div class="status ${statusClass}" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span> ${esc(statusText)} — ${summary.errors} error${summary.errors===1?"":"s"}, ${summary.warnings} warning${summary.warnings===1?"":"s"} · ${affectedViewports}/${totalViewports} viewports affected${suppressedCount ? ` · ${suppressedCount} suppressed` : ""}</div>
+  <div class="status ${statusClass}" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span> ${esc(statusText)} — ${summary.errors} error${summary.errors===1?"":"s"}, ${summary.warnings} warning${summary.warnings===1?"":"s"} · ${affectedViewports}/${totalViewports} viewports affected${suppressedCount ? ` · ${suppressedCount} suppressed` : ""}${report.policy ? ` · policy ${report.policy.failed ? "FAIL" : "PASS"}` : ""}</div>
   ${suppressedCount ? `<div role="note" aria-label="Suppressed findings" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px dashed var(--border);background:rgba(154,163,184,0.08);color:var(--muted);font-size:12px">${suppressedCount} finding(s) suppressed by config ${report.suppression?.configPath ? `(<span class="mono">${esc(report.suppression.configPath)}</span>)` : ""} — see findings.json suppression details.</div>` : ``}
   <nav class="filters" id="filters" aria-label="Filter findings">
     <label for="filter-viewport">Viewport

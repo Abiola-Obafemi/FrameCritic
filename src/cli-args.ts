@@ -37,6 +37,9 @@ export type ParsedArgs = {
   viewports?: Viewport[];
   help: boolean;
   config?: string;
+  failOn?: "error" | "warning" | "never";
+  maxWarnings?: number;
+  jsonSummary?: boolean;
 };
 
 /** Parse argv (without node+script) — exported for tests. Throws on invalid input. */
@@ -54,6 +57,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let open = false;
   let viewports: Viewport[] | undefined;
   let config: string | undefined;
+  let failOn: ParsedArgs["failOn"] | undefined;
+  let maxWarnings: number | undefined;
+  let jsonSummary = false;
   const positional: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
@@ -105,6 +111,42 @@ export function parseArgs(argv: string[]): ParsedArgs {
       if (!config) throw new Error(`--config requires a file path`);
       continue;
     }
+    if (a === "--fail-on") {
+      const raw = argv[i + 1];
+      if (!raw || raw.startsWith("-")) throw new Error(`--fail-on requires a value (error|warning|never)`);
+      const v = raw.toLowerCase();
+      if (!["error", "warning", "never"].includes(v)) throw new Error(`--fail-on must be one of: error, warning, never (got "${raw}")`);
+      failOn = v as any;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--fail-on=")) {
+      const raw = a.slice("--fail-on=".length);
+      const v = raw.toLowerCase();
+      if (!["error", "warning", "never"].includes(v)) throw new Error(`--fail-on must be one of: error, warning, never (got "${raw}")`);
+      failOn = v as any;
+      continue;
+    }
+    if (a === "--max-warnings") {
+      const raw = argv[i + 1];
+      if (!raw || raw.startsWith("-")) throw new Error(`--max-warnings requires a number`);
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 0) throw new Error(`--max-warnings must be a non-negative integer (got "${raw}")`);
+      maxWarnings = n;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--max-warnings=")) {
+      const raw = a.slice("--max-warnings=".length);
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 0) throw new Error(`--max-warnings must be a non-negative integer (got "${raw}")`);
+      maxWarnings = n;
+      continue;
+    }
+    if (a === "--json-summary") {
+      jsonSummary = true;
+      continue;
+    }
     if (a.startsWith("-")) {
       throw new Error(`Unknown option "${a}". See --help.`);
     }
@@ -114,5 +156,5 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (positional.length > 0) url = positional[0];
   if (positional.length > 1 && !output) output = positional[1];
 
-  return { command, url, output, open, viewports, help: false, config };
+  return { command, url, output, open, viewports, help: false, config, failOn, maxWarnings, jsonSummary };
 }
