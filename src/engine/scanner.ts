@@ -85,7 +85,9 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
       });
 
       try {
-        await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        // Wait briefly for network to settle without hard-failing on pending third-party requests
+        await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
       } catch (e: any) {
         // Record navigation failure and still try to continue
         pageErrors.push({
@@ -98,7 +100,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
       }
 
       // Give images a moment to load/fail
-      await page.waitForTimeout(1200);
+      await page.waitForTimeout(1000);
 
       const findings = await collectPageFindings(page, vp.label, consoleErrors, pageErrors);
 

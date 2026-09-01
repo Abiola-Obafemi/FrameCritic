@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Demo App — FrameCritic fixture (intentionally buggy)</title>
+<style>
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;color:#1a1a1a}
+  header{background:#111;color:#fff;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}
+  .nav{display:flex;gap:16px}
+  .hero{padding:32px 24px;background:#f3f4f6}
+  .hero h1{margin:0 0 8px}
+  .card-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:24px}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;position:relative}
+  /* INTENTIONAL BUG 1: fixed 600px banner that overflows on mobile */
+  .wide-banner{width:600px;background:#7c5cff;color:#fff;padding:16px 20px;margin:16px 24px;border-radius:10px}
+  /* INTENTIONAL BUG 2: overlapping badges */
+  .badge{position:absolute;top:10px;right:10px;background:#111;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
+  .badge-2{position:absolute;top:8px;right:22px;background:#ff4d6a;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
+  /* INTENTIONAL BUG 3: off-screen element */
+  .offscreen{position:absolute;left:1450px;top:200px;width:200px;background:#fef08a;padding:12px;border:1px solid #facc15}
+  @media(max-width:900px){ .card-grid{grid-template-columns:1fr 1fr} }
+  @media(max-width:560px){ .card-grid{grid-template-columns:1fr} }
+  footer{padding:18px 24px;background:#111;color:#9aa3b8;font-size:13px;margin-top:20px}
+  img.demo{width:120px;height:120px;object-fit:cover;border-radius:8px;background:#e5e7eb}
+</style>
+</head>
+<body>
+<header>
+  <strong>DemoShop</strong>
+  <nav class="nav"><span>Home</span><span>Products</span><span>About</span><span>Contact</span></nav>
+</header>
+
+<div class="hero">
+  <h1>Welcome to DemoShop</h1>
+  <p>This fixture is intentionally buggy so FrameCritic can prove it catches real issues.</p>
+</div>
+
+<div class="wide-banner">Wide banner — 600px fixed width. Will overflow on 390px mobile viewport. This simulates a common AI-build mistake (fixed widths).</div>
+
+<section class="card-grid">
+  <div class="card">
+    <span class="badge">NEW</span>
+    <span class="badge-2">HOT</span>
+    <img class="demo" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%237c5cff'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='14'%3EA%3C/text%3E%3C/svg%3E" alt="Product A" />
+    <h3>Product A</h3>
+    <p>Overlapping badges (NEW + HOT) — should be flagged as overlap.</p>
+  </div>
+  <div class="card">
+    <img class="demo" src="/nonexistent-broken-image-xyz.png" alt="Broken product image" />
+    <h3>Product B</h3>
+    <p>Broken image — src points to a file that 404s.</p>
+  </div>
+  <div class="card">
+    <img class="demo" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%232ecc71'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='14'%3EC%3C/text%3E%3C/svg%3E" alt="Product C" />
+    <h3>Product C</h3>
+    <p>Normal card, no issues.</p>
+  </div>
+</section>
+
+<div class="offscreen">I'm positioned at left:1450px — outside viewport on mobile/tablet.</div>
+
+<footer>Demo fixture for FrameCritic verification. Bugs: horizontal overflow, overlap, broken image, console errors, off-screen element.</footer>
+
+<script>
+  // INTENTIONAL BUG 4 & 5: console error + uncaught exception
+  console.error("DemoShop: failed to load recommendations — simulated console.error");
+  // pageerror
+  setTimeout(()=>{ throw new Error("DemoShop: unhandled widget failure — simulated pageerror"); }, 200);
+  // Failed fetch that 404s
+  fetch("/api/nonexistent-endpoint-xyz").then(r=>{ if(!r.ok) console.error("API 404 /api/nonexistent-endpoint-xyz", r.status); });
+</script>
+</body>
+</html>
