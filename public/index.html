@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>FrameCritic v0.1 — Visual QA</title>
+<style>
+  :root{--bg:#0b0e14;--card:#151a25;--card2:#1a2133;--border:#232c43;--text:#e6e8ee;--muted:#9aa3b8;--accent:#7c5cff;--err:#ff4d6a;--warn:#ffb020;--ok:#2ecc71;--info:#4da3ff}
+  *{box-sizing:border-box} body{margin:0;font-family:ui-sans-system,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+  header{max-width:980px;margin:0 auto;padding:28px 20px 8px}
+  .brand{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .brand span{color:var(--text)}
+  h1{margin:8px 0 6px;font-size:28px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:14px;max-width:640px}
+  main{max-width:980px;margin:0 auto;padding:18px 20px 40px}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input[type=url],input[type=text]{flex:1;min-width:260px;background:#0f1422;border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:var(--text);font-size:15px;outline:none}
+  input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,92,255,.18)}
+  button{appearance:none;border:0;border-radius:10px;padding:12px 18px;font-weight:650;font-size:14px;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:disabled{opacity:.55;cursor:not-allowed}
+  .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:#0f1422}
+  .status{margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:#0f1422;display:none}
+  .status.show{display:block}
+  .status.err{border-color:#4a1e2e;background:#1a0f18;color:#ffb3c2}
+  .status.ok{border-color:#1a4a2e;background:#0f1a14;color:#b3ffcf}
+  .viewports{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .vp-chip{font-size:12px;border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:#0f1422;color:var(--muted)}
+  .vp-chip strong{color:var(--text)}
+  .results{margin-top:22px}
+  .results h2{font-size:16px;margin:0 0 10px}
+  .grid{display:grid;grid-template-columns:1fr;gap:16px}
+  @media(min-width:760px){.grid{grid-template-columns:1fr 1fr 1fr}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .card-head{padding:10px 12px;border-bottom:1px solid var(--border);background:var(--card2);display:flex;justify-content:space-between;align-items:center}
+  .card-head h3{margin:0;font-size:12px;letter-spacing:.05em;text-transform:uppercase}
+  .shot{max-height:380px;overflow:auto;background:#080a12;text-align:center}
+  .shot img{max-width:100%;display:block}
+  .findings{padding:10px;display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto}
+  .f{border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#0f1422;font-size:12px}
+  .f.err{border-left:3px solid var(--err)} .f.warn{border-left:3px solid var(--warn)} .f.info{border-left:3px solid var(--info)}
+  .badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px}
+  .badge.err{background:#3a1320;color:var(--err)} .badge.warn{background:#3a2d10;color:var(--warn)} .badge.info{background:#132a44;color:var(--info)}
+  details summary{cursor:pointer;color:var(--muted);font-size:11px}
+  pre{font-size:11px;overflow:auto;max-height:180px;background:#080a12;border:1px solid var(--border);border-radius:8px;padding:8px;margin:6px 0 0}
+  .history{margin-top:26px}
+  .history h2{font-size:14px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+  .hist-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--card);margin-top:8px;gap:10px;flex-wrap:wrap}
+  .hist-item a{color:var(--info);text-decoration:none;font-size:13px;word-break:break-all}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  footer{max-width:980px;margin:0 auto;padding:10px 20px 24px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">◐ <span>FrameCritic</span> v0.1</div>
+  <h1>Visual QA for your web app</h1>
+  <p class="sub">Paste a <span class="mono">localhost</span> or public URL. FrameCritic captures it at <strong>390×844</strong>, <strong>768×1024</strong>, <strong>1440×900</strong> and flags overflow, overlaps, broken images, and console errors — all local, no cloud.</p>
+</header>
+<main>
+  <div class="panel">
+    <div class="row">
+      <input id="url" type="text" placeholder="http://localhost:3001  or  https://example.com" value="http://localhost:3001" />
+      <button id="scanBtn" class="btn-primary">Run Scan →</button>
+      <button id="clearBtn" class="btn-ghost" title="Clear results">Clear</button>
+    </div>
+    <div class="hint">Tip: start your app first (e.g. <span class="mono">npm run dev</span>), then scan its localhost URL. Results are saved to <span class="mono">framecritic-out/</span>.</div>
+    <div class="viewports">
+      <span class="vp-chip"><strong>390×844</strong> · Mobile</span>
+      <span class="vp-chip"><strong>768×1024</strong> · Tablet</span>
+      <span class="vp-chip"><strong>1440×900</strong> · Desktop</span>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div id="results" class="results" style="display:none">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 id="resultsTitle">Latest Scan</h2>
+      <span class="pill" id="summaryPill"></span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <a id="reportLink" href="#" target="_blank" class="pill" style="text-decoration:none;color:var(--info)">Open full report.html ↗</a>
+      <a id="jsonLink" href="#" target="_blank" class="pill" style="text-decoration:none;color:var(--muted)">findings.json</a>
+    </div>
+    <div id="grid" class="grid"></div>
+    <div id="flat" style="margin-top:16px"></div>
+  </div>
+
+  <div class="history">
+    <h2>Recent scans</h2>
+    <div id="history"></div>
+  </div>
+</main>
+<footer>FrameCritic v0.1 · Local-first · No accounts, no cloud, no AI calls. Artifacts live in <span class="mono">framecritic-out/</span>.</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const urlInput = $('#url');
+const scanBtn = $('#scanBtn');
+const statusEl = $('#status');
+const resultsEl = $('#results');
+const gridEl = $('#grid');
+const flatEl = $('#flat');
+const summaryPill = $('#summaryPill');
+const resultsTitle = $('#resultsTitle');
+const reportLink = $('#reportLink');
+const jsonLink = $('#jsonLink');
+const historyEl = $('#history');
+
+function setStatus(msg, kind){
+  statusEl.textContent = msg;
+  statusEl.className = 'status show ' + (kind||'');
+  if(!msg) statusEl.className='status';
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderReport(report, outDirRel){
+  const outBase = outDirRel ? '/' + outDirRel.replace(/\\/g,'/') : '';
+  // outDirRel like framecritic-out/scan-... -> served at /reports/scan-...
+  const reportsBase = outBase.replace('framecritic-out','reports');
+  resultsEl.style.display='block';
+  resultsTitle.textContent = 'Scan — ' + report.url;
+  const s = report.summary;
+  summaryPill.textContent = s.total + ' findings · ' + s.errors + ' errors · ' + s.warnings + ' warnings';
+  summaryPill.style.color = s.errors ? '#ff4d6a' : s.warnings ? '#ffb020' : '#2ecc71';
+  reportLink.href = reportsBase + '/report.html';
+  jsonLink.href = reportsBase + '/findings.json';
+  gridEl.innerHTML = report.results.map(r=>{
+    const findings = r.findings.map(f=>`
+      <div class="f ${esc(f.severity)}">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="badge ${esc(f.severity)}">${esc(f.severity.toUpperCase())}</span>
+          <strong>${esc(f.type)}</strong>
+          <span class="mono" style="color:#9aa3b8">${esc(f.viewport)}</span>
+        </div>
+        <div style="margin-top:4px;color:#d0d6e6">${esc(f.message)}</div>
+        ${f.details ? `<details><summary>Details</summary><pre>${esc(JSON.stringify(f.details,null,2))}</pre></details>` : ''}
+      </div>`).join('') || '<div style="color:#9aa3b8;font-size:13px;padding:6px">No issues at this viewport.</div>';
+    return `<div class="card">
+      <div class="card-head"><h3>${esc(r.viewport.label)} · ${r.viewport.width}×${r.viewport.height}</h3><span class="mono" style="font-size:11px;color:#9aa3b8">${r.findings.length} findings</span></div>
+      <div class="shot"><a href="${reportsBase}/${esc(r.screenshot)}" target="_blank"><img src="${reportsBase}/${esc(r.screenshot)}" alt="${esc(r.viewport.label)}" loading="lazy"/></a></div>
+      <div class="findings">${findings}</div>
+    </div>`;
+  }).join('');
+  flatEl.innerHTML = '<h3 style="font-size:14px">All findings ('+report.findings.length+')</h3>' + (report.findings.length ? report.findings.map(f=>`
+    <div class="f ${esc(f.severity)}" style="margin-top:8px">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span class="badge ${esc(f.severity)}">${esc(f.severity.toUpperCase())}</span>
+        <strong>${esc(f.type)}</strong><span class="mono" style="color:#9aa3b8">${esc(f.viewport)}</span>
+      </div>
+      <div style="margin-top:4px">${esc(f.message)}</div>
+      ${f.details ? `<details><summary>Details</summary><pre>${esc(JSON.stringify(f.details,null,2))}</pre></details>`:''}
+    </div>`).join('') : '<div style="color:#9aa3b8">No findings — clean pass.</div>');
+}
+
+async function loadHistory(){
+  try{
+    const res = await fetch('/api/reports');
+    const scans = await res.json();
+    if(!scans.length){ historyEl.innerHTML='<div style="color:#9aa3b8;font-size:13px">No scans yet.</div>'; return; }
+    historyEl.innerHTML = scans.slice(0,8).map(s=>{
+      const r = s.report;
+      const dir = s.dir;
+      const href = '/reports/' + dir + '/report.html';
+      const jhref = '/reports/' + dir + '/findings.json';
+      const summary = r ? `${r.summary.total} findings · ${r.summary.errors} err · ${r.summary.warnings} warn` : 'no report';
+      const url = r ? r.url : dir;
+      return `<div class="hist-item"><div><a href="${href}" target="_blank">${esc(url)}</a><div class="mono" style="font-size:11px;color:#9aa3b8">${esc(dir)} · ${esc(summary)}</div></div><div style="display:flex;gap:6px"><a href="${href}" target="_blank" class="pill" style="text-decoration:none">Report</a><a href="${jhref}" target="_blank" class="pill" style="text-decoration:none">JSON</a></div></div>`;
+    }).join('');
+  }catch{ historyEl.innerHTML='<div style="color:#9aa3b8">Failed to load history.</div>'; }
+}
+
+async function doScan(){
+  const url = urlInput.value.trim();
+  if(!url){ setStatus('Enter a URL first.','err'); return; }
+  scanBtn.disabled=true; scanBtn.textContent='Scanning…';
+  setStatus('Capturing at 3 viewports and analyzing — this takes ~8–15s…','');
+  try{
+    const res = await fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error||'Scan failed');
+    setStatus('Scan complete — ' + data.report.summary.total + ' findings ('+data.report.summary.errors+' errors, '+data.report.summary.warnings+' warnings).','ok');
+    renderReport(data.report, data.outDir);
+    loadHistory();
+  }catch(e){
+    setStatus('Scan failed: ' + (e.message||String(e)),'err');
+  }finally{
+    scanBtn.disabled=false; scanBtn.textContent='Run Scan →';
+  }
+}
+
+scanBtn.addEventListener('click', doScan);
+urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') doScan(); });
+$('#clearBtn').addEventListener('click', ()=>{ resultsEl.style.display='none'; setStatus('',''); });
+
+loadHistory();
+// Auto-load latest if exists
+fetch('/api/status').then(r=>r.json()).then(d=>{
+  if(d.latestReport && d.latestOutDir){
+    const rel = d.latestOutDir.replace(/\\/g,'/').replace(/^.*framecritic-out/,'framecritic-out');
+    renderReport(d.latestReport, rel);
+  }
+}).catch(()=>{});
+</script>
+</body>
+</html>

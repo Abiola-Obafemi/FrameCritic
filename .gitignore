@@ -1,0 +1,8 @@
+node_modules/
+dist/
+framecritic-out/
+demo-app/
+.playwright/
+*.log
+.DS_Store
+Thumbs.db
