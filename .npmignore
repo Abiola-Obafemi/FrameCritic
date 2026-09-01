@@ -1,0 +1,14 @@
+.git
+.gitignore
+demo-app
+framecritic-out
+src
+*.test.*
+*.test.d.ts
+*.test.js
+*.test.js.map
+.wakatime-project
+NIGHT_SHIFT.md
+*.tgz
+.env
+.env.*

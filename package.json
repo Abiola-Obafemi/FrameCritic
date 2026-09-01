@@ -1,17 +1,50 @@
 {
   "name": "framecritic",
   "version": "0.1.0",
-  "description": "FrameCritic — local-first visual QA for AI-built web apps",
+  "description": "FrameCritic — local-first visual QA for AI-built web apps. No cloud, no AI, no accounts.",
   "type": "module",
+  "license": "MIT",
+  "author": "Abiola Obafemi",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Abiola-Obafemi/FrameCritic.git"
+  },
+  "homepage": "https://github.com/Abiola-Obafemi/FrameCritic#readme",
+  "bugs": {
+    "url": "https://github.com/Abiola-Obafemi/FrameCritic/issues"
+  },
+  "keywords": [
+    "visual-testing",
+    "playwright",
+    "developer-tools",
+    "ai-agents",
+    "quality-assurance",
+    "typescript",
+    "qa",
+    "screenshot",
+    "accessibility"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "framecritic": "dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "public/",
+    "README.md",
+    "LICENSE",
+    "!dist/**/*.test.*",
+    "!dist/**/*.test.*.map"
+  ],
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc",
     "scan": "tsx src/cli.ts",
-    "test": "node --test dist/**/*.test.js"
+    "test": "node --test dist/**/*.test.js",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "express": "^4.19.2"
