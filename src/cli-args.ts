@@ -36,6 +36,7 @@ export type ParsedArgs = {
   open: boolean;
   viewports?: Viewport[];
   help: boolean;
+  config?: string;
 };
 
 /** Parse argv (without node+script) — exported for tests. Throws on invalid input. */
@@ -52,6 +53,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let output: string | undefined;
   let open = false;
   let viewports: Viewport[] | undefined;
+  let config: string | undefined;
   const positional: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
@@ -89,6 +91,20 @@ export function parseArgs(argv: string[]): ParsedArgs {
       open = true;
       continue;
     }
+    if (a === "--config") {
+      const raw = argv[i + 1];
+      if (!raw || raw.startsWith("-")) {
+        throw new Error(`--config requires a file path`);
+      }
+      config = raw;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--config=")) {
+      config = a.slice("--config=".length);
+      if (!config) throw new Error(`--config requires a file path`);
+      continue;
+    }
     if (a.startsWith("-")) {
       throw new Error(`Unknown option "${a}". See --help.`);
     }
@@ -98,5 +114,5 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (positional.length > 0) url = positional[0];
   if (positional.length > 1 && !output) output = positional[1];
 
-  return { command, url, output, open, viewports, help: false };
+  return { command, url, output, open, viewports, help: false, config };
 }

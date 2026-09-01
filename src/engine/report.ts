@@ -52,6 +52,7 @@ export function generateHtmlReport(report: ScanReport): string {
   const affectedViewports = results.filter((r) => r.findings.length > 0).length;
   const affectedByErrors = results.filter((r) => r.findings.some((f) => f.severity === "error")).length;
   const totalViewports = results.length;
+  const suppressedCount = report.suppression?.totalSuppressed ?? 0;
 
   const uniqueTypes = Array.from(new Set(findings.map((f) => f.type))).sort();
   const viewports = report.viewports;
@@ -250,8 +251,10 @@ export function generateHtmlReport(report: ScanReport): string {
     <span class="compact-pill err"><strong>${summary.errors}</strong> errors</span>
     <span class="compact-pill warn"><strong>${summary.warnings}</strong> warnings</span>
     <span class="compact-pill vp"><strong>${affectedViewports}/${totalViewports}</strong> viewports affected${affectedByErrors ? ` · ${affectedByErrors} with errors` : ""}</span>
+    ${suppressedCount ? `<span class="compact-pill" style="color:#9aa3b8;border-style:dashed"><strong>${suppressedCount}</strong> suppressed</span>` : ``}
   </div>
-  <div class="status ${statusClass}" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span> ${esc(statusText)} — ${summary.errors} error${summary.errors===1?"":"s"}, ${summary.warnings} warning${summary.warnings===1?"":"s"} · ${affectedViewports}/${totalViewports} viewports affected</div>
+  <div class="status ${statusClass}" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span> ${esc(statusText)} — ${summary.errors} error${summary.errors===1?"":"s"}, ${summary.warnings} warning${summary.warnings===1?"":"s"} · ${affectedViewports}/${totalViewports} viewports affected${suppressedCount ? ` · ${suppressedCount} suppressed` : ""}</div>
+  ${suppressedCount ? `<div role="note" aria-label="Suppressed findings" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px dashed var(--border);background:rgba(154,163,184,0.08);color:var(--muted);font-size:12px">${suppressedCount} finding(s) suppressed by config ${report.suppression?.configPath ? `(<span class="mono">${esc(report.suppression.configPath)}</span>)` : ""} — see findings.json suppression details.</div>` : ``}
   <nav class="filters" id="filters" aria-label="Filter findings">
     <label for="filter-viewport">Viewport
       <select id="filter-viewport" aria-label="Filter by viewport">

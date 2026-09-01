@@ -30,6 +30,7 @@ Options:
   --viewport <list>          Viewports to scan (comma-separated)
                              Built-ins: mobile (390×844), tablet (768×1024), desktop (1440×900)
                              Custom:    390x844,768x1024  or  mobile,desktop
+  --config <path>            Path to .framecritic.json (default: ./.framecritic.json if present)
   --open                     Open report.html in default browser after scan
   -h, --help                 Show this help
   -v, --version              Show version
@@ -39,9 +40,13 @@ Examples:
   framecritic scan http://localhost:3001 --output ./out --viewport mobile,desktop
   framecritic scan http://localhost:3001 --open
   framecritic scan https://example.com --viewport 390x844,1440x900
+  framecritic scan http://localhost:3001 --config ./my-config.json
 
 Detectors:
   horizontal-overflow · outside-viewport · overlapping-elements · broken-image · console/page errors
+
+Config (.framecritic.json):
+  { "ignore": { "selectors": [], "types": [], "viewports": { "mobile": [], "tablet": [], "desktop": [] } } }
 `);
 }
 
@@ -87,8 +92,14 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
   console.log(formatSummaryLine("Target:", url, "cyan"));
   console.log(formatSummaryLine("Viewports:", results.map((r) => `${r.viewport.label} ${r.viewport.width}×${r.viewport.height}`).join("  ·  ")));
   console.log(formatSummaryLine("Output:", path.relative(process.cwd(), outDir) || outDir, "dim"));
+  if (report.suppression?.configPath) {
+    console.log(formatSummaryLine("Config:", report.suppression.configPath, "dim"));
+  }
   console.log("");
   console.log(`  ${statusColor === "red" ? "\x1b[31m✕\x1b[0m" : statusColor === "yellow" ? "\x1b[33m▲\x1b[0m" : "\x1b[32m✓\x1b[0m"} ${status} — ${summary.errors} error${summary.errors === 1 ? "" : "s"}, ${summary.warnings} warning${summary.warnings === 1 ? "" : "s"} · ${affected}/${results.length} viewports affected`);
+  if (report.suppression && report.suppression.totalSuppressed > 0) {
+    console.log(`  suppressed ${report.suppression.totalSuppressed} finding(s) via config`);
+  }
   console.log("");
 
   const header = `  ${"Viewport".padEnd(22)} ${"Findings".padEnd(12)} ${"Markers".padEnd(10)} Screenshot`;
@@ -113,6 +124,13 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
     for (const [t, c] of byType.entries()) {
       console.log(`    · ${t.padEnd(24)} ${c}`);
     }
+    console.log("");
+  }
+  if (report.suppression && report.suppression.totalSuppressed > 0) {
+    console.log(`  Suppressed: ${report.suppression.totalSuppressed} finding(s)`);
+    const byReason = new Map<string, number>();
+    for (const s of report.suppression.suppressed) byReason.set(s.reason, (byReason.get(s.reason) ?? 0) + 1);
+    for (const [r, c] of byReason.entries()) console.log(`    · ${r.padEnd(24)} ${c}`);
     console.log("");
   }
   console.log(`  findings.json  → ${path.join(outDir, "findings.json")}`);
@@ -169,7 +187,7 @@ if (isMain) {
 
   let report: Awaited<ReturnType<typeof scanUrl>>;
   try {
-    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any });
+    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config });
   } catch (e: any) {
     console.error(`\n[FrameCritic] Scan failed: ${e?.message ?? String(e)}`);
     process.exit(1);

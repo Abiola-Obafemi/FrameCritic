@@ -5,11 +5,13 @@ import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type Ann
 import { collectPageFindings } from "./detect.js";
 import { generateHtmlReport } from "./report.js";
 import { generateAgentFixesMarkdown } from "./agentFixes.js";
+import { loadConfig, applyIgnoreRules } from "../config.js";
 
 export type ScanOptions = {
   url: string;
   outDir: string;
   viewports?: typeof VIEWPORTS;
+  configPath?: string;
 };
 
 function normalizeUrl(input: string): string {
@@ -203,12 +205,16 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
   const outDir = opts.outDir;
   const timestamp = new Date().toISOString();
 
+  // Load config (throws on malformed / missing explicit)
+  const { config, path: configPath } = loadConfig({ explicitPath: opts.configPath });
+
   await mkdir(outDir, { recursive: true });
   await mkdir(path.join(outDir, "screenshots"), { recursive: true });
 
   const browser = await chromium.launch({ headless: true });
   const results: ViewportResult[] = [];
   const allFindings: Finding[] = [];
+  const allSuppressed: Array<{ finding: Finding; reason: string }> = [];
 
   try {
     for (const vp of viewports) {
@@ -287,8 +293,12 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
         deduped.push(f);
       }
 
-      // Build annotation boxes and attach markerIds to findings
-      const { boxes } = buildAnnotationBoxes(deduped);
+      // Apply ignore rules
+      const { kept, suppressed } = applyIgnoreRules(deduped, config);
+      allSuppressed.push(...suppressed);
+
+      // Build annotation boxes and attach markerIds to kept findings only
+      const { boxes } = buildAnnotationBoxes(kept);
 
       const screenshotRel = `screenshots/${vp.label}-${vp.width}x${vp.height}.png`;
       const annotatedRel = boxes.length ? `screenshots/${vp.label}-${vp.width}x${vp.height}-annotated.png` : undefined;
@@ -311,10 +321,10 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
         screenshot: screenshotRel,
         annotatedScreenshot: annotatedRel,
         annotations: boxes,
-        findings: deduped,
+        findings: kept,
       };
       results.push(vr);
-      allFindings.push(...deduped);
+      allFindings.push(...kept);
 
       await context.close();
     }
@@ -329,6 +339,14 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     infos: allFindings.filter((f) => f.severity === "info").length,
   };
 
+  const suppression = allSuppressed.length || configPath
+    ? {
+        totalSuppressed: allSuppressed.length,
+        suppressed: allSuppressed,
+        configPath: configPath ?? null,
+      }
+    : undefined;
+
   const report: ScanReport = {
     url,
     timestamp,
@@ -336,6 +354,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     results,
     findings: allFindings,
     summary,
+    suppression,
   };
 
   await writeFile(path.join(outDir, "findings.json"), JSON.stringify(report, null, 2), "utf-8");

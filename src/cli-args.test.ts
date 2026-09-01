@@ -76,4 +76,14 @@ describe("CLI argument parsing", () => {
   it("throws on missing --output value", () => {
     assert.throws(() => parseArgs(["scan", "http://a", "--output"]), /requires a directory/);
   });
+
+  it("parses --config with value and equals", () => {
+    assert.equal(parseArgs(["scan", "http://a", "--config", "cfg.json"]).config, "cfg.json");
+    assert.equal(parseArgs(["scan", "http://a", "--config=cfg2.json"]).config, "cfg2.json");
+  });
+
+  it("throws on missing --config value", () => {
+    assert.throws(() => parseArgs(["scan", "http://a", "--config"]), /requires a file path/);
+    assert.throws(() => parseArgs(["scan", "http://a", "--config="]), /requires a file path/);
+  });
 });

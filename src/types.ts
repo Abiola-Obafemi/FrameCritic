@@ -43,11 +43,23 @@ export type ViewportResult = {
   findings: Finding[];
 };
 
+export type SuppressionEntry = {
+  finding: Finding;
+  reason: string;
+};
+
+export type SuppressionSummary = {
+  totalSuppressed: number;
+  suppressed: SuppressionEntry[];
+  configPath: string | null;
+};
+
 export type ScanReport = {
   url: string;
   timestamp: string;
   viewports: Viewport[];
   results: ViewportResult[];
-  findings: Finding[]; // flattened
+  findings: Finding[]; // flattened kept findings
   summary: { total: number; errors: number; warnings: number; infos: number };
+  suppression?: SuppressionSummary;
 };
