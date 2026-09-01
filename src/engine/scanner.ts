@@ -16,6 +16,7 @@ export type ScanOptions = {
   configPath?: string;
   policy?: PolicyOptions;
   scenarioPath?: string;
+  trace?: boolean;
 };
 
 function normalizeUrl(input: string): string {
@@ -217,11 +218,13 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
 
   await mkdir(outDir, { recursive: true });
   await mkdir(path.join(outDir, "screenshots"), { recursive: true });
+  if (opts.trace) await mkdir(path.join(outDir, "traces"), { recursive: true });
 
   const browser = await chromium.launch({ headless: true });
   const results: ViewportResult[] = [];
   const allFindings: Finding[] = [];
   const allSuppressed: Array<{ finding: Finding; reason: string }> = [];
+  const traceFiles: string[] = [];
 
   try {
     for (const vp of viewports) {
@@ -229,6 +232,9 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
         viewport: { width: vp.width, height: vp.height },
         deviceScaleFactor: 1,
       });
+      if (opts.trace) {
+        await context.tracing.start({ screenshots: true, snapshots: true });
+      }
       const page = await context.newPage();
 
       const consoleErrors: Finding[] = [];
@@ -355,6 +361,13 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
       results.push(vr);
       allFindings.push(...kept);
 
+      if (opts.trace) {
+        const traceRel = `traces/${vp.label}-${vp.width}x${vp.height}.zip`;
+        const traceAbs = path.join(outDir, traceRel);
+        await context.tracing.stop({ path: traceAbs });
+        traceFiles.push(traceRel);
+      }
+
       await context.close();
     }
   } finally {
@@ -394,6 +407,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     suppression,
     policy: policyDecision,
     scenario: scenario ? { name: scenario.name, steps: scenario.steps, file: opts.scenarioPath ?? null } as any : null,
+    trace: opts.trace ? { enabled: true, files: traceFiles } : null,
   };
 
   await writeFile(path.join(outDir, "findings.json"), JSON.stringify(report, null, 2), "utf-8");

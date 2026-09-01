@@ -35,6 +35,8 @@ Options (scan):
   --fail-on <mode>           CI gate: error|warning|never (default: error)
   --max-warnings <n>         Max warnings allowed before failing (default: no limit; 0 = no warnings)
   --json-summary             Emit machine-readable JSON summary to stdout and file
+  --scenario <file>          Declarative scenario JSON (click/fill/hover/press/wait)
+  --trace                    Capture Playwright trace (stored in traces/*.zip)
   --open                     Open report.html in default browser after scan
 
 Options (compare):
@@ -119,6 +121,12 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
   if (report.suppression?.configPath) {
     console.log(formatSummaryLine("Config:", report.suppression.configPath, "dim"));
   }
+  if (report.scenario) {
+    console.log(formatSummaryLine("Scenario:", `${report.scenario.name} (${report.scenario.steps.length} steps)`, "dim"));
+  }
+  if (report.trace?.enabled) {
+    console.log(formatSummaryLine("Trace:", `${report.trace.files.length} file(s) → ${path.join(outDir, "traces")}`, "dim"));
+  }
   if (report.policy) {
     const pol = report.policy.failOn + (report.policy.maxWarnings !== undefined ? `, max-warnings=${report.policy.maxWarnings}` : "");
     console.log(formatSummaryLine("Policy:", `${pol} → ${report.policy.failed ? "FAIL" : "PASS"} (${report.policy.reason})`, report.policy.failed ? "red" : "green"));
@@ -167,6 +175,9 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
   console.log(`  findings.json  → ${path.join(outDir, "findings.json")}`);
   console.log(`  report.html    → ${path.join(outDir, "report.html")}`);
   console.log(`  AGENT_FIXES.md → ${path.join(outDir, "AGENT_FIXES.md")}`);
+  if (report.trace?.enabled) {
+    for (const f of report.trace.files) console.log(`  trace        → ${path.join(outDir, f)}`);
+  }
   if (report.policy) {
     console.log(`  policy: fail-on=${report.policy.failOn}${report.policy.maxWarnings !== undefined ? ` max-warnings=${report.policy.maxWarnings}` : ""} → ${report.policy.failed ? "FAIL" : "PASS"}`);
   }
@@ -248,6 +259,9 @@ if (isMain) {
   if (parsed.scenario) {
     console.log(`[FrameCritic] Scenario: ${parsed.scenario}`);
   }
+  if (parsed.trace) {
+    console.log(`[FrameCritic] Trace: enabled`);
+  }
   console.log(`[FrameCritic] Output → ${outDir}`);
 
   const policyOpts = {
@@ -257,7 +271,7 @@ if (isMain) {
 
   let report: Awaited<ReturnType<typeof scanUrl>>;
   try {
-    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config, policy: policyOpts, scenarioPath: parsed.scenario });
+    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config, policy: policyOpts, scenarioPath: parsed.scenario, trace: parsed.trace });
   } catch (e: any) {
     console.error(`\n[FrameCritic] Scan failed: ${e?.message ?? String(e)}`);
     process.exit(1);

@@ -74,6 +74,11 @@ export type ScenarioInfo = {
   file?: string;
 };
 
+export type TraceInfo = {
+  enabled: boolean;
+  files: string[]; // relative paths
+};
+
 export type ScanReport = {
   url: string;
   timestamp: string;
@@ -84,4 +89,5 @@ export type ScanReport = {
   suppression?: SuppressionSummary;
   policy?: PolicyDecision;
   scenario?: ScenarioInfo | null;
+  trace?: TraceInfo | null;
 };
