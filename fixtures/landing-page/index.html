@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Landing Page Fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui}
+header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#fff;border-bottom:1px solid #e5e7eb}
+.hero{padding:40px 20px;background:linear-gradient(135deg,#7c5cff,#2ecc71);color:#fff}
+.pricing{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;padding:24px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;position:relative}
+.card.featured{border-color:#7c5cff;transform:scale(1.02)}
+.dropdown{position:relative;display:inline-block}
+.dropdown-content{display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #e5e7eb;border-radius:8px;min-width:140px;box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.dropdown:hover .dropdown-content{display:block}
+.wide-hero{width:640px;background:#111;color:#fff;padding:14px;border-radius:8px;margin:16px 0}
+.badge{position:absolute;top:10px;right:10px;background:#111;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
+.badge2{position:absolute;top:8px;right:20px;background:#ff4d6a;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
+@media(max-width:900px){.pricing{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.pricing{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><strong>LandingCo</strong><div class="dropdown"><button>Menu</button><div class="dropdown-content"><a href="#">Features</a><a href="#">Pricing</a></div></div></header>
+<section class="hero"><h1>Launch faster</h1><p>Build with AI, ship with confidence.</p><div class="wide-hero">Wide hero 640px — overflows on mobile</div></section>
+<section class="pricing">
+<div class="card"><span class="badge">POPULAR</span><span class="badge2">NEW</span><h3>Starter</h3><p>$19/mo</p></div>
+<div class="card featured"><h3>Pro</h3><p>$49/mo</p><img src="/missing-hero.png" alt="hero" style="width:80px;height:60px;background:#eee"/></div>
+<div class="card"><h3>Enterprise</h3><p>Custom</p></div>
+</section>
+<footer style="padding:20px;background:#111;color:#9aa3b8">© 2026 LandingCo</footer>
+<script>
+console.error("Landing fixture error");
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SaaS Dashboard Fixture — intentional regressions</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui;background:#f3f4f6}
+.sidebar{position:fixed;left:0;top:0;width:240px;height:100vh;background:#111;color:#fff;padding:20px}
+.main{margin-left:240px;padding:24px}
+.card-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:16px;position:relative}
+.table{width:100%;border-collapse:collapse;background:#fff;margin-top:16px}
+.table th,.table td{padding:10px;border:1px solid #e5e7eb;text-align:left}
+.wide-notice{width:620px;background:#7c5cff;color:#fff;padding:14px;border-radius:8px;margin:16px 0}
+.badge{position:absolute;top:8px;right:10px;background:#111;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
+.badge2{position:absolute;top:6px;right:22px;background:#ff4d6a;color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center}
+.modal.open{display:flex}
+.modal-content{background:#fff;padding:24px;border-radius:12px;width:400px}
+.offscreen{position:absolute;left:1450px;top:300px;width:180px;background:#fef08a;padding:12px;border:1px solid #facc15}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0}.card-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.card-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="sidebar"><h3>Dashboard</h3><p>Nav</p><button id="openModal" style="background:#7c5cff;color:#fff;border:0;padding:8px 12px;border-radius:6px">Open Modal</button></div>
+<div class="main">
+<h1>Analytics</h1>
+<div class="wide-notice">Wide notice 620px — will overflow on mobile (intentional)</div>
+<div class="card-grid">
+<div class="card"><span class="badge">NEW</span><span class="badge2">HOT</span><h3>Revenue</h3><p>$42k</p></div>
+<div class="card"><img src="/missing-image.png" alt="chart" style="width:100px;height:60px;background:#eee"/><h3>Users</h3></div>
+<div class="card"><h3>Orders</h3><p>1.2k</p></div>
+</div>
+<table class="table"><tr><th>Project</th><th>Status</th></tr><tr><td>Alpha</td><td>Active</td></tr></table>
+</div>
+<div class="offscreen">Offscreen panel at 1450px</div>
+<div id="modal" class="modal"><div class="modal-content"><h2>Modal</h2><p>Details</p><button onclick="document.getElementById('modal').classList.remove('open')">Close</button></div></div>
+<script>
+document.getElementById('openModal').addEventListener('click',()=>document.getElementById('modal').classList.add('open'));
+console.error("SaaS fixture: simulated console error");
+fetch("/api/missing").then(r=>{if(!r.ok) console.error("API 404",r.status)});
+</script>
+</body>
+</html>

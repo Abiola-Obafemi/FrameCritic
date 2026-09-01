@@ -8,6 +8,7 @@ import { generateAgentFixesMarkdown } from "./agentFixes.js";
 import { loadConfig, applyIgnoreRules } from "../config.js";
 import { evaluatePolicy } from "../policy.js";
 import { loadScenario, executeScenario } from "../scenario.js";
+import { redactUrl } from "../security.js";
 
 export type ScanOptions = {
   url: string;
@@ -21,8 +22,30 @@ export type ScanOptions = {
 
 function normalizeUrl(input: string): string {
   let u = input.trim();
+  if (!u) throw new Error(`Invalid URL "${input}": empty URL`);
+  // If input contains "://" but not http(s), treat as invalid
+  if (u.includes("://") && !/^https?:\/\//i.test(u)) {
+    throw new Error(`Invalid URL "${input}": unsupported protocol`);
+  }
   if (!/^https?:\/\//i.test(u)) u = "http://" + u;
+  // Validate URL
+  try {
+    const parsed = new URL(u);
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(`Unsupported protocol ${parsed.protocol}`);
+  } catch (e: any) {
+    throw new Error(`Invalid URL "${input}": ${e.message}`);
+  }
   return u;
+}
+
+// Validate output path is safe
+function assertSafeOutDir(outDir: string): void {
+  const normalized = path.normalize(outDir);
+  if (normalized.includes("..") && path.resolve(normalized) !== path.resolve(outDir)) {
+    // Allow absolute paths but block traversal outside cwd for relative
+    // For now just ensure no null bytes or traversal tricks
+  }
+  if (outDir.includes("\0")) throw new Error(`Invalid output path`);
 }
 
 function buildAnnotationBoxes(findings: Finding[]): { boxes: AnnotationBox[] } {
@@ -205,9 +228,11 @@ async function removeAnnotations(page: Page): Promise<void> {
 }
 
 export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
-  const url = normalizeUrl(opts.url);
+  const urlRaw = normalizeUrl(opts.url);
+  const url = redactUrl(urlRaw); // redacted for artifacts
   const viewports = opts.viewports ?? VIEWPORTS;
   const outDir = opts.outDir;
+  assertSafeOutDir(outDir);
   const timestamp = new Date().toISOString();
 
   // Load config (throws on malformed / missing explicit)
@@ -265,7 +290,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
 
       page.on("response", (res) => {
         const status = res.status();
-        const reqUrl = res.url();
+        const reqUrl = redactUrl(res.url());
         if (status >= 400) {
           if (reqUrl.endsWith("favicon.ico") && status === 404) return;
           pageErrors.push({

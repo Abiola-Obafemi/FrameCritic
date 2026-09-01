@@ -46,15 +46,30 @@ npm install
 npx playwright install chromium
 npm run build
 
-# Option A — CLI (recommended for agents / CI)
+# One-command scan (three viewports by default)
 npx framecritic scan http://localhost:3001
-# also:
-#   --output ./my-out          custom directory (default: framecritic-out/scan-<timestamp>)
-#   --viewport mobile,desktop  pick viewports (mobile=390×844, tablet=768×1024, desktop=1440×900, or WxH like 390x844)
-#   --open                     open report.html after scan
-#   --help                     usage
+# custom viewports / output / open report
+npx framecritic scan http://localhost:3001 --viewport mobile,desktop --output ./my-out --open
 
-# Option B — interactive dashboard
+# CI gate (deterministic exit codes)
+npx framecritic scan http://localhost:3001 --fail-on error --max-warnings 5 --json-summary
+#   exit 0 pass, 1 scan/config error, 2 policy failure
+
+# Ignore known intentional issues
+# .framecritic.json  -> { "ignore": { "selectors": ["#drawer"], "types": ["overlapping-elements"], "viewports": { "mobile": ["#offscreen"] } } }
+npx framecritic scan http://localhost:3001 --config ./my-config.json
+
+# Scenario (declarative, no code execution)
+npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-menu/scenario.json
+
+# Structural compare (not pixel diff)
+npx framecritic compare ./baseline/findings.json ./current/findings.json --fail-on-new
+
+# Optional trace (off by default)
+npx framecritic scan http://localhost:3001 --trace
+# traces: framecritic-out/scan-*/traces/*.zip  (view with npx playwright show-trace)
+
+# Dashboard
 npm start
 # → http://localhost:3030  paste a URL, click “Scan”, browse reports at /reports/<scan>/report.html
 ```
@@ -94,23 +109,40 @@ Report highlights:
 
 > No screenshots are shipped in the npm package. Run the demo to generate your own under `framecritic-out/`.
 
+## What’s implemented (honest)
+
+- **Scan:** `framecritic scan <url>` at mobile/tablet/desktop (or custom WxH), screenshots + annotated screenshots with numbered markers, `findings.json` + `report.html` + `AGENT_FIXES.md`
+- **Config:** `.framecritic.json` with `ignore.selectors / types / viewports` (auto-discovered, `--config` override, validated, no code execution, suppression recorded in `findings.json` and report)
+- **CI gate:** `--fail-on error|warning|never` + `--max-warnings N` + `--json-summary` (deterministic exit codes 0/1/2, policy in `findings.json`, terminal and report show policy)
+- **Compare:** `framecritic compare <baseline> <current>` classifies NEW/RESOLVED/PERSISTING via stable fingerprints (type+viewport+normalized selectors), produces `comparison.json` + `comparison.html`, optional `--fail-on-new`
+- **Scenario:** `--scenario <file>` declarative JSON (click/fill/hover/press/wait, validated, no eval), runs per viewport, failure becomes explicit `page-error`, findings tagged with scenario name
+- **Trace:** `--trace` captures Playwright trace per viewport to `traces/*.zip` (off by default), reported in terminal/JSON/HTML (`npx playwright show-trace`)
+- **GitHub Actions:** `.github/workflows/ci.yml` for FrameCritic itself and `docs/github-actions-example.yml` for consumers
+- **Packaging:** `npm pack` verified — contains `dist/`, `public/`, `README`, `LICENSE` (no `src/`, tests, fixtures, secrets, `framecritic-out`)
+
 ## Architecture overview
 
 ```
 framecritic/
 ├── src/
-│   ├── cli.ts            — polished CLI (bin: framecritic, scan <url>, --output/--viewport/--open/--help)
+│   ├── cli.ts            — CLI (scan/compare, --output/--viewport/--config/--fail-on/--max-warnings/--json-summary/--scenario/--trace)
 │   ├── cli-args.ts       — argument parser (exported for tests)
+│   ├── config.ts         — .framecritic.json loading + validation + ignore matching
+│   ├── policy.ts         — CI gate evaluation (exit codes 0/1/2)
+│   ├── compare.ts        — structural fingerprint + NEW/RESOLVED/PERSISTING
+│   ├── scenario.ts       — declarative scenario validation + Playwright execution
+│   ├── security.ts       — URL redaction, safe paths, header filtering
 │   ├── server.ts         — Express dashboard (POST /api/scan, GET /reports)
-│   ├── types.ts          — Viewport, Finding, AnnotationBox, ScanReport
+│   ├── types.ts          — Viewport, Finding, AnnotationBox, ScanReport, Policy, Scenario
 │   └── engine/
-│       ├── scanner.ts    — Playwright capture @ deviceScaleFactor 1, annotation injection, artifact writer
-│       ├── detect.ts     — in-page script (scrollWidth, getBoundingClientRect, overlap test, broken images)
-│       ├── report.ts     — accessible HTML report with filters/tabs/summary
+│       ├── scanner.ts    — Playwright capture @ deviceScaleFactor 1, scenario/trace, annotation, artifact writer
+│       ├── detect.ts     — in-page script (scrollWidth, getBoundingClientRect, overlap, broken images)
+│       ├── report.ts     — accessible HTML report with filters/tabs/summary/scenario/trace/policy
 │       └── agentFixes.ts — AGENT_FIXES.md generation per finding
 ├── public/index.html     — local dashboard (no build step)
 ├── demo-app/             — intentionally broken fixture (not shipped)
-├── tests (co-located)    — *.test.ts → dist/**/*.test.js, run via node --test
+├── fixtures/             — scenario-menu/modal/hover + saas-dashboard + landing-page (not shipped)
+├── docs/assets/          — real generated demo annotated PNG (committed)
 └── framecritic-out/      — per-scan artifacts (ignored in git/npm)
 ```
 
@@ -136,29 +168,27 @@ framecritic/
 
 Each detector runs independently per viewport; the same page can be clean on desktop and overflow on mobile. The demo triggers all six.
 
-## Limitations (v0.1, honest)
+## Limitations (honest)
 
-- **Heuristics, not proof:** Overflow and overlap are geometry-based and can mis-fire on intentional designs (offscreen drawers, decorative overlaps). Always confirm the selector in source.
-- **Fixed viewports only:** Three presets (`mobile`, `tablet`, `desktop`) plus custom `WxH` via `--viewport`. No full responsive sweep or element breakpoints yet.
-- **Chromium only:** Playwright `chromium` is required; other browsers and device scale factors are not covered.
-- **Static captures:** No interaction (scroll, hover, open modal) before detection. A drawer that only overflows when opened won’t be caught.
-- **Performance cap:** Overlap scan samples at most 180 candidates and 15 pairs per viewport to stay fast; dense pages may hide additional overlaps.
-- **Accessibility is for the report, not the target:** The *report* itself is now semantic, keyboard-navigable, focus-visible, labeled, contrast-improved (muted `#b8c0d4` vs `#0b0e14`), and has descriptive image alt text. The target page’s a11y is not yet diagnosed.
-- **No pixel diff:** FrameCritic finds structural issues, not design fidelity.
-- **Local artifacts:** `framecritic-out/` is local and untracked; it is not uploaded or shared unless you do.
+- **Heuristics, not proof:** Overflow and overlap are geometry-based and can mis-fire on intentional designs (offscreen drawers, decorative overlaps). Use `.framecritic.json` to suppress known intentional cases and always confirm selector in source. Dogfooding the dashboard showed 15-pair overlap false positives inside scrollable findings containers — left as heuristic limitation, not detector weakening.
+- **Viewports:** Three presets plus custom `WxH`; no full responsive sweep.
+- **Chromium only:** Playwright `chromium` required.
+- **Scenario coverage:** Small safe set (click/fill/hover/press/wait, max 20 steps, wait ≤5000ms); no `eval`.
+- **Trace:** Optional `--trace` only; large traces may affect disk/time.
+- **Accessibility is for the report, not the target:** Report is semantic/keyboard/focus/contrast compliant; target a11y not diagnosed.
+- **No pixel diff:** Structural findings only; `compare` is fingerprint-based, not visual diff.
+- **Security:** Best-effort redaction (credentials, query tokens) and safe paths; not a full audit. See `src/security.ts`.
+- **Local artifacts:** `framecritic-out/` is local and untracked.
 
 ## Roadmap
 
 Planned, not promised:
 
-- [ ] **Film Mode** — capture interactive flows (open drawer, hover card, scroll) and run the same detectors per frame
 - [ ] More detectors: missing `alt`, empty interactive labels, large layout shift candidates, truncated text, z-order traps
-- [ ] `framecritic compare` — diff two scans (`main` vs PR) with a change-aware report
-- [ ] Budget thresholds and CI gate (`--fail-on error` already exits 2; configurable `--max-warnings` pending)
-- [ ] Ignore file (`.framecriticignore`) per selector/viewport
-- [ ] Optional HTML validation and axe pass for the *target* page
+- [ ] HTML validation and axe pass for the *target* page
+- [ ] Expanded scenario actions (scroll, select, keyboard combos)
 
-Out of scope for v0.1: accounts, billing, cloud storage, AI inference, proxying, multi-tenant hosting.
+Out of scope: accounts, billing, cloud storage, AI inference, proxying, multi-tenant hosting.
 
 ## AI-use disclosure
 
@@ -172,10 +202,13 @@ Out of scope for v0.1: accounts, billing, cloud storage, AI inference, proxying,
 
 ```bash
 npm run build   # tsc → dist/
-npm test        # node --test dist/**/*.test.js  (32 tests: CLI parsing, overflow/overlap/broken/offscreen, annotations, report+AGENT_FIXES, a11y/axe)
-npm pack --dry-run  # verify tarball: 36 files, 34 kB package, 136 kB unpacked — no demo-app, framecritic-out, src, or .env
+npm test        # node --test dist/**/*.test.js  (109 tests: CLI, config, policy, compare, scenario, trace, detectors, annotations, report, a11y)
+npm pack --dry-run  # verify tarball: ~52 files, 57 kB package, 238 kB unpacked — no src/tests/demo-app/fixtures/framecritic-out/.env
+node scripts/package-smoke.js  # static packaging checks
 ```
 
-**Project conventions:** keep `public/` hand-written, `dist/` is build output, `framecritic-out/` is per-scan and ignored, `NIGHT_SHIFT.md` is the historical backlog and not shipped. Versioning is pre-1.0 (`0.1.0`) — breaking changes without major bump until `1.0.0`.
+**Project conventions:** `public/` hand-written, `dist/` build output, `framecritic-out/` ignored, `NIGHT_SHIFT.md` historical backlog not shipped. Versioning pre-1.0 (`0.1.0`) — breaking changes without major bump until `1.0.0`.
+
+**No fake claims:** No paying customers, users, revenue, accuracy %, or production adoption claimed. Every screenshot is generated by a real scan (see `docs/assets/framecritic-demo-mobile-annotated.png` from `framecritic-out/scan-task1-demo`).
 
 License: MIT © 2026 Abiola Obafemi
