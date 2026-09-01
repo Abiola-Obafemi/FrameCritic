@@ -234,11 +234,9 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
     }
     console.log("");
   }
-  console.log(`  findings.json → ${path.join(outDir, "findings.json")}`);
-  console.log(`  report.html   → ${path.join(outDir, "report.html")}`);
-  if (results.some((r) => r.annotatedScreenshot)) {
-    console.log(`  AGENT_FIXES.md → ${path.join(outDir, "AGENT_FIXES.md")}  (if generated)`);
-  }
+  console.log(`  findings.json  → ${path.join(outDir, "findings.json")}`);
+  console.log(`  report.html    → ${path.join(outDir, "report.html")}`);
+  console.log(`  AGENT_FIXES.md → ${path.join(outDir, "AGENT_FIXES.md")}`);
   console.log("");
   if (hasErrors) {
     console.log(`  Next: open report.html in a browser (or re-run with --open) to see annotated regions.`);

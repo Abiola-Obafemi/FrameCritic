@@ -4,6 +4,7 @@ import path from "node:path";
 import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox } from "../types.js";
 import { collectPageFindings } from "./detect.js";
 import { generateHtmlReport } from "./report.js";
+import { generateAgentFixesMarkdown } from "./agentFixes.js";
 
 export type ScanOptions = {
   url: string;
@@ -340,6 +341,8 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
   await writeFile(path.join(outDir, "findings.json"), JSON.stringify(report, null, 2), "utf-8");
   const html = generateHtmlReport(report);
   await writeFile(path.join(outDir, "report.html"), html, "utf-8");
+  const fixesMd = generateAgentFixesMarkdown(report);
+  await writeFile(path.join(outDir, "AGENT_FIXES.md"), fixesMd, "utf-8");
 
   return report;
 }
