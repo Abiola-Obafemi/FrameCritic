@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "FrameCritic — local-first visual QA for AI-built web apps",
   "type": "module",
+  "bin": {
+    "framecritic": "dist/cli.js"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
