@@ -30,7 +30,7 @@ export function parseViewportList(raw: string | undefined): Viewport[] | null {
 }
 
 export type ParsedArgs = {
-  command: "scan" | "help" | "version";
+  command: "scan" | "compare" | "help" | "version";
   url?: string;
   output?: string;
   open: boolean;
@@ -40,6 +40,10 @@ export type ParsedArgs = {
   failOn?: "error" | "warning" | "never";
   maxWarnings?: number;
   jsonSummary?: boolean;
+  // compare specific
+  compareBaseline?: string;
+  compareCurrent?: string;
+  failOnNew?: boolean;
 };
 
 /** Parse argv (without node+script) — exported for tests. Throws on invalid input. */
@@ -60,6 +64,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let failOn: ParsedArgs["failOn"] | undefined;
   let maxWarnings: number | undefined;
   let jsonSummary = false;
+  let failOnNew = false;
   const positional: string[] = [];
 
   for (let i = 0; i < argv.length; i++) {
@@ -147,14 +152,43 @@ export function parseArgs(argv: string[]): ParsedArgs {
       jsonSummary = true;
       continue;
     }
+    if (a === "compare") {
+      command = "compare";
+      continue;
+    }
+    if (a === "--fail-on-new") {
+      failOnNew = true;
+      continue;
+    }
     if (a.startsWith("-")) {
       throw new Error(`Unknown option "${a}". See --help.`);
     }
     positional.push(a);
   }
 
+  // handle compare positional args
+  if (command === "compare") {
+    if (positional.length < 2) {
+      throw new Error(`compare requires two arguments: <baseline-findings.json> <current-findings.json>`);
+    }
+    return {
+      command,
+      output,
+      open,
+      viewports,
+      help: false,
+      config,
+      failOn,
+      maxWarnings,
+      jsonSummary,
+      compareBaseline: positional[0],
+      compareCurrent: positional[1],
+      failOnNew,
+    };
+  }
+
   if (positional.length > 0) url = positional[0];
   if (positional.length > 1 && !output) output = positional[1];
 
-  return { command, url, output, open, viewports, help: false, config, failOn, maxWarnings, jsonSummary };
+  return { command, url, output, open, viewports, help: false, config, failOn, maxWarnings, jsonSummary, failOnNew };
 }

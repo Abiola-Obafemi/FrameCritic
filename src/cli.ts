@@ -23,9 +23,10 @@ No cloud, no AI, no accounts.
 
 Usage:
   framecritic scan <url> [options]
+  framecritic compare <baseline.json> <current.json> [options]
   framecritic <url> [options]          (shorthand)
 
-Options:
+Options (scan):
   --output <dir>            Output directory (default: framecritic-out/scan-<timestamp>)
   --viewport <list>          Viewports to scan (comma-separated)
                              Built-ins: mobile (390×844), tablet (768×1024), desktop (1440×900)
@@ -35,6 +36,12 @@ Options:
   --max-warnings <n>         Max warnings allowed before failing (default: no limit; 0 = no warnings)
   --json-summary             Emit machine-readable JSON summary to stdout and file
   --open                     Open report.html in default browser after scan
+
+Options (compare):
+  --output <dir>            Output directory for comparison (default: framecritic-out/comparison-<timestamp>)
+  --fail-on-new             Exit 2 if any NEW findings (regression)
+
+General:
   -h, --help                 Show this help
   -v, --version              Show version
 
@@ -45,6 +52,8 @@ Examples:
   framecritic scan https://example.com --viewport 390x844,1440x900
   framecritic scan http://localhost:3001 --config ./my-config.json
   framecritic scan http://localhost:3001 --fail-on warning --max-warnings 5 --json-summary
+  framecritic compare ./baseline/findings.json ./current/findings.json
+  framecritic compare ./baseline/findings.json ./current/findings.json --fail-on-new
 
 Detectors:
   horizontal-overflow · outside-viewport · overlapping-elements · broken-image · console/page errors
@@ -53,9 +62,9 @@ Config (.framecritic.json):
   { "ignore": { "selectors": [], "types": [], "viewports": { "mobile": [], "tablet": [], "desktop": [] } } }
 
 Exit codes:
-  0  pass (policy satisfied)
+  0  pass (policy satisfied or no new regressions)
   1  scan or config error
-  2  policy failure (fail-on threshold exceeded)
+  2  policy failure or new regressions with --fail-on-new
 
 Policy:
   --fail-on error   fail if any error
@@ -194,6 +203,31 @@ if (isMain) {
   if (parsed.command === "version") {
     console.log(getVersion());
     process.exit(0);
+  }
+
+  if (parsed.command === "compare") {
+    const baseline = parsed.compareBaseline!;
+    const current = parsed.compareCurrent!;
+    const outDir = parsed.output ?? path.join(process.cwd(), "framecritic-out", `comparison-${Date.now()}`);
+    try {
+      const { compareReports, writeComparison } = await import("./compare.js");
+      const result = compareReports(baseline, current);
+      const { jsonPath, htmlPath } = writeComparison(result, outDir);
+      console.log(`[FrameCritic] Comparison → ${outDir}`);
+      console.log(`  Baseline: ${baseline} (${result.summary.totalBaseline} findings)`);
+      console.log(`  Current:  ${current} (${result.summary.totalCurrent} findings)`);
+      console.log(`  NEW: ${result.summary.new}  RESOLVED: ${result.summary.resolved}  PERSISTING: ${result.summary.persisting}`);
+      console.log(`  comparison.json → ${jsonPath}`);
+      console.log(`  comparison.html → ${htmlPath}`);
+      if (parsed.failOnNew && result.summary.new > 0) {
+        console.log(`  --fail-on-new: ${result.summary.new} new finding(s) → exit 2`);
+        process.exit(2);
+      }
+      process.exit(0);
+    } catch (e: any) {
+      console.error(`[FrameCritic] Compare failed: ${e?.message ?? String(e)}`);
+      process.exit(1);
+    }
   }
 
   let url = parsed.url;
