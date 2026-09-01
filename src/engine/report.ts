@@ -25,21 +25,21 @@ function typeLabel(t: Finding["type"]): string {
 function renderFinding(f: Finding, idx: number): string {
   const detailsJson = f.details ? JSON.stringify(f.details, null, 2) : "";
   const markerBadges = (f.markerIds ?? [])
-    .map((id) => `<span class="marker-badge ${esc(f.severity)}" title="Marker ${id}">#${id}</span>`)
+    .map((id) => `<span class="marker-badge ${esc(f.severity)}" aria-label="Marker ${id}" title="Marker ${id}">#${id}</span>`)
     .join(" ");
   const hasMarkers = (f.markerIds?.length ?? 0) > 0;
   return `
-  <div class="finding sev-${esc(f.severity)}" data-viewport="${esc(f.viewport)}" data-severity="${esc(f.severity)}" data-type="${esc(f.type)}" id="finding-${idx}">
+  <article class="finding sev-${esc(f.severity)}" data-viewport="${esc(f.viewport)}" data-severity="${esc(f.severity)}" data-type="${esc(f.type)}" id="finding-${idx}" aria-labelledby="finding-title-${idx}">
     <div class="finding-head">
       ${badge(f.severity)}
-      <span class="ftype">${esc(typeLabel(f.type))}</span>
+      <span class="ftype" id="finding-title-${idx}">${esc(typeLabel(f.type))}</span>
       <span class="vpill">${esc(f.viewport)}</span>
-      ${hasMarkers ? `<span class="markers">${markerBadges}</span>` : ``}
+      ${hasMarkers ? `<span class="markers" aria-label="Markers ${esc(f.markerIds!.join(", "))}">${markerBadges}</span>` : ``}
     </div>
     <div class="msg">${esc(f.message)}</div>
     ${hasMarkers ? `<div class="marker-hint">Markers ${esc(f.markerIds!.join(", "))} on annotated screenshot</div>` : ``}
     ${detailsJson ? `<details><summary>Details</summary><pre>${esc(detailsJson)}</pre></details>` : ``}
-  </div>`;
+  </article>`;
 }
 
 export function generateHtmlReport(report: ScanReport): string {
@@ -61,31 +61,44 @@ export function generateHtmlReport(report: ScanReport): string {
       const annotated = r.annotatedScreenshot;
       const clean = r.screenshot;
       const annCount = r.annotations?.length ?? 0;
+      const typesInVp = Array.from(new Set(r.findings.map((f) => typeLabel(f.type)))).join(", ") || "no issues";
+      const annAlt = `Annotated screenshot for ${r.viewport.label} ${r.viewport.width}×${r.viewport.height} — ${annCount ? `${annCount} highlighted region(s) marking ${typesInVp}` : "no regions"} — see legend below for marker mapping`;
+      const cleanAlt = `Clean screenshot for ${r.viewport.label} ${r.viewport.width}×${r.viewport.height} — no highlights — ${r.findings.length ? `${r.findings.length} finding(s)` : "no findings"} at this viewport`;
+      const tabIdAnn = `tab-${esc(r.viewport.label)}-annotated`;
+      const tabIdClean = `tab-${esc(r.viewport.label)}-clean`;
+      const panelIdAnn = `panel-${esc(r.viewport.label)}-annotated`;
+      const panelIdClean = `panel-${esc(r.viewport.label)}-clean`;
       const shotHtml = annotated
         ? `<div class="shot-tabs" data-vp="${esc(r.viewport.label)}">
             <div class="tab-bar">
-              <button class="tab active" data-tab="annotated">Annotated · ${annCount} marker${annCount === 1 ? "" : "s"}</button>
-              <button class="tab" data-tab="clean">Clean</button>
-              <a class="tab-link" href="${esc(annotated)}" target="_blank" rel="noopener">open ↗</a>
+              <div role="tablist" aria-label="Screenshot view for ${esc(r.viewport.label)}">
+                <button class="tab active" role="tab" id="${tabIdAnn}" aria-selected="true" aria-controls="${panelIdAnn}" data-tab="annotated">Annotated · ${annCount} marker${annCount === 1 ? "" : "s"}</button>
+                <button class="tab" role="tab" id="${tabIdClean}" aria-selected="false" aria-controls="${panelIdClean}" data-tab="clean">Clean</button>
+              </div>
+              <a class="tab-link" href="${esc(annotated)}" target="_blank" rel="noopener" aria-label="Open annotated screenshot for ${esc(r.viewport.label)} in new tab">open ↗</a>
             </div>
             <div class="shot-wrap">
-              <img class="shot-img shot-annotated" src="${esc(annotated)}" alt="Annotated ${esc(r.viewport.label)}" loading="lazy" />
-              <img class="shot-img shot-clean" src="${esc(clean)}" alt="Clean ${esc(r.viewport.label)}" loading="lazy" style="display:none" />
+              <div id="${panelIdAnn}" role="tabpanel" aria-labelledby="${tabIdAnn}">
+                <img class="shot-img shot-annotated" src="${esc(annotated)}" alt="${esc(annAlt)}" loading="lazy" />
+              </div>
+              <div id="${panelIdClean}" role="tabpanel" aria-labelledby="${tabIdClean}" hidden>
+                <img class="shot-img shot-clean" src="${esc(clean)}" alt="${esc(cleanAlt)}" loading="lazy" />
+              </div>
             </div>
           </div>`
         : `<div class="shot-wrap">
-            <a href="${esc(clean)}" target="_blank" rel="noopener"><img src="${esc(clean)}" alt="Screenshot ${esc(r.viewport.label)}" loading="lazy" /></a>
+            <a href="${esc(clean)}" target="_blank" rel="noopener" aria-label="Open clean screenshot for ${esc(r.viewport.label)}"><img src="${esc(clean)}" alt="${esc(cleanAlt)}" loading="lazy" /></a>
            </div>`;
 
       const legend = r.annotations?.length
-        ? `<div class="legend">
-            <div class="legend-title">Markers on this viewport</div>
-            <div class="legend-grid">
+        ? `<section class="legend" aria-labelledby="legend-title-${esc(r.viewport.label)}">
+            <h4 class="legend-title" id="legend-title-${esc(r.viewport.label)}">Markers on this viewport</h4>
+            <div class="legend-grid" role="list">
               ${r.annotations
                 .map(
                   (a) => `
-                <div class="legend-item sev-${esc(a.severity)}">
-                  <span class="legend-id ${esc(a.severity)}">#${a.id}</span>
+                <div class="legend-item sev-${esc(a.severity)}" role="listitem">
+                  <span class="legend-id ${esc(a.severity)}" aria-label="Marker ${a.id}">#${a.id}</span>
                   <span class="legend-type">${esc(typeLabel(a.type))}</span>
                   <span class="legend-label">${esc(a.label)}</span>
                   ${a.selector ? `<span class="legend-sel mono" title="${esc(a.selector)}">${esc(a.selector.length > 42 ? a.selector.slice(0, 42) + "…" : a.selector)}</span>` : ""}
@@ -93,7 +106,7 @@ export function generateHtmlReport(report: ScanReport): string {
                 )
                 .join("")}
             </div>
-          </div>`
+          </section>`
         : ``;
 
       const findingsHtml = r.findings.length
@@ -126,8 +139,12 @@ export function generateHtmlReport(report: ScanReport): string {
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>FrameCritic Report — ${esc(url)}</title>
 <style>
-  :root { --bg:#0b0e14; --card:#151a25; --card2:#1a2133; --border:#232c43; --text:#e6e8ee; --muted:#9aa3b8; --err:#ff4d6a; --warn:#ffb020; --ok:#2ecc71; --info:#4da3ff; }
+  :root { --bg:#0b0e14; --card:#151a25; --card2:#1a2133; --border:#232c43; --text:#e6e8ee; --muted:#b8c0d4; --err:#ff4d6a; --warn:#ffb020; --ok:#2ecc71; --info:#4da3ff; --focus:#7c5cff; }
   *{box-sizing:border-box}
+  *:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:2px}
+  *:focus:not(:focus-visible){outline:none}
+  .skip-link{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+  .skip-link:focus{left:12px;top:12px;width:auto;height:auto;background:var(--card);color:var(--text);padding:8px 12px;border-radius:8px;border:1px solid var(--border);z-index:9999}
   body{margin:0;font-family: ui-sans-system, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
   header{max-width:1200px;margin:0 auto;padding:28px 20px 10px}
   .brand{font-weight:700;letter-spacing:.04em;font-size:13px;color:var(--muted);text-transform:uppercase}
@@ -218,8 +235,9 @@ export function generateHtmlReport(report: ScanReport): string {
 </style>
 </head>
 <body>
-<header>
-  <div class="brand">◐ <span>FrameCritic</span> v0.1 — Visual QA Report</div>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<header role="banner">
+  <div class="brand" aria-label="FrameCritic version 0.1">◐ <span>FrameCritic</span> v0.1 — Visual QA Report</div>
   <h1>${esc(statusText)}</h1>
   <div class="meta">Target: <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a> · <span class="mono">${esc(timestamp)}</span> · Viewports: ${report.viewports.map((v) => `${esc(v.label)} ${v.width}×${v.height}`).join(" · ")}</div>
   <div class="summary">
@@ -233,44 +251,44 @@ export function generateHtmlReport(report: ScanReport): string {
     <span class="compact-pill warn"><strong>${summary.warnings}</strong> warnings</span>
     <span class="compact-pill vp"><strong>${affectedViewports}/${totalViewports}</strong> viewports affected${affectedByErrors ? ` · ${affectedByErrors} with errors` : ""}</span>
   </div>
-  <div class="status ${statusClass}"><span class="dot"></span> ${esc(statusText)} — ${summary.errors} error${summary.errors===1?"":"s"}, ${summary.warnings} warning${summary.warnings===1?"":"s"} · ${affectedViewports}/${totalViewports} viewports affected</div>
-  <div class="filters" id="filters">
-    <label>Viewport
-      <select id="filter-viewport">
+  <div class="status ${statusClass}" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span> ${esc(statusText)} — ${summary.errors} error${summary.errors===1?"":"s"}, ${summary.warnings} warning${summary.warnings===1?"":"s"} · ${affectedViewports}/${totalViewports} viewports affected</div>
+  <nav class="filters" id="filters" aria-label="Filter findings">
+    <label for="filter-viewport">Viewport
+      <select id="filter-viewport" aria-label="Filter by viewport">
         <option value="all">All viewports</option>
         ${viewports.map((v) => `<option value="${esc(v.label)}">${esc(v.label)} ${v.width}×${v.height}</option>`).join("")}
       </select>
     </label>
-    <label>Severity
-      <select id="filter-severity">
+    <label for="filter-severity">Severity
+      <select id="filter-severity" aria-label="Filter by severity">
         <option value="all">All severities</option>
         <option value="error">error</option>
         <option value="warning">warning</option>
         <option value="info">info</option>
       </select>
     </label>
-    <label>Finding type
-      <select id="filter-type">
+    <label for="filter-type">Finding type
+      <select id="filter-type" aria-label="Filter by finding type">
         <option value="all">All types</option>
         ${uniqueTypes.map((t) => `<option value="${esc(t)}">${esc(typeLabel(t))}</option>`).join("")}
       </select>
     </label>
-    <button id="filter-reset" type="button">Reset</button>
-    <span class="results-count" id="filter-count">${summary.total} findings</span>
-  </div>
+    <button id="filter-reset" type="button" aria-label="Reset all filters">Reset</button>
+    <span class="results-count" id="filter-count" aria-live="polite" aria-atomic="true">${summary.total} findings</span>
+  </nav>
 </header>
-<main>
-  <h2>Screenshots &amp; Findings by Viewport</h2>
-  <div class="grid" id="vp-grid">
+<main id="main-content">
+  <h2 id="vp-heading">Screenshots &amp; Findings by Viewport</h2>
+  <div class="grid" id="vp-grid" aria-labelledby="vp-heading">
     ${vpCards}
   </div>
 
-  <h2>All Findings (flat) — filtered</h2>
-  <div class="all-findings" id="flat-findings">
+  <h2 id="flat-heading">All Findings (flat) — filtered</h2>
+  <div class="all-findings" id="flat-findings" aria-labelledby="flat-heading">
     ${allFindingsHtml}
   </div>
 </main>
-<footer>
+<footer role="contentinfo">
   Generated locally by FrameCritic v0.1 — no cloud, no AI. Artifacts: <span class="mono">screenshots/*.png</span> + <span class="mono">*-annotated.png</span>, <span class="mono">findings.json</span>, <span class="mono">report.html</span>, <span class="mono">AGENT_FIXES.md</span> — markers link findings to annotated regions.
 </footer>
 <script>
@@ -294,34 +312,50 @@ export function generateHtmlReport(report: ScanReport): string {
       const mType = type === 'all' || el.dataset.type === type;
       const show = mVp && mSev && mType;
       el.classList.toggle('hidden', !show);
+      el.setAttribute('aria-hidden', String(!show));
       if(show) visible++;
     });
-    // also reflect on viewport cards optionally dim empty ones
     document.querySelectorAll('.vp-card').forEach(card=>{
       const vpLabel = card.dataset.viewport;
       const vpMatch = vp === 'all' || vpLabel === vp;
-      // if viewport filter mismatches, hide card; otherwise keep but findings inside may be hidden
       card.style.display = vpMatch ? '' : 'none';
+      card.setAttribute('aria-hidden', String(!vpMatch));
     });
     countEl.textContent = visible + ' / ' + total + ' findings visible';
   }
   vpSel.addEventListener('change', applyFilters);
   sevSel.addEventListener('change', applyFilters);
   typeSel.addEventListener('change', applyFilters);
-  resetBtn.addEventListener('click', ()=>{ vpSel.value='all'; sevSel.value='all'; typeSel.value='all'; applyFilters(); });
+  resetBtn.addEventListener('click', ()=>{ vpSel.value='all'; sevSel.value='all'; typeSel.value='all'; applyFilters(); vpSel.focus(); });
 
-  // screenshot tab switching
+  // screenshot tab switching — keyboard accessible
   document.querySelectorAll('.shot-tabs').forEach(tabs=>{
-    const btns = tabs.querySelectorAll('.tab');
-    const ann = tabs.querySelector('.shot-annotated');
-    const clean = tabs.querySelector('.shot-clean');
-    btns.forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const isAnn = btn.dataset.tab === 'annotated';
-        btns.forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        if(ann) ann.style.display = isAnn ? '' : 'none';
-        if(clean) clean.style.display = isAnn ? 'none' : '';
+    const btns = Array.from(tabs.querySelectorAll('[role="tab"]'));
+    const panels = Array.from(tabs.querySelectorAll('[role="tabpanel"]'));
+    function activate(idx){
+      btns.forEach((b,i)=>{
+        const active = i===idx;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-selected', String(active));
+        b.tabIndex = active ? 0 : -1;
+      });
+      panels.forEach((p,i)=>{
+        const active = i===idx;
+        if(active){ p.removeAttribute('hidden'); } else { p.setAttribute('hidden',''); }
+      });
+    }
+    btns.forEach((btn, idx)=>{
+      btn.addEventListener('click', ()=> activate(idx));
+      btn.addEventListener('keydown', (e)=>{
+        const key = e.key;
+        let next = -1;
+        if(key==='ArrowRight' || key==='ArrowLeft'){
+          e.preventDefault();
+          const dir = key==='ArrowRight' ? 1 : -1;
+          next = (idx + dir + btns.length) % btns.length;
+        } else if(key==='Home'){ e.preventDefault(); next=0; }
+        else if(key==='End'){ e.preventDefault(); next=btns.length-1; }
+        if(next!==-1){ activate(next); btns[next].focus(); }
       });
     });
   });
