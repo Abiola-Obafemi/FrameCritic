@@ -271,7 +271,7 @@ export function generateHtmlReport(report: ScanReport): string {
   </div>
 </main>
 <footer>
-  Generated locally by FrameCritic v0.1 — no cloud, no AI. Artifacts: <span class="mono">screenshots/*.png</span> + <span class="mono">*-annotated.png</span>, <span class="mono">findings.json</span>, <span class="mono">report.html</span> — markers link findings to annotated regions.
+  Generated locally by FrameCritic v0.1 — no cloud, no AI. Artifacts: <span class="mono">screenshots/*.png</span> + <span class="mono">*-annotated.png</span>, <span class="mono">findings.json</span>, <span class="mono">report.html</span>, <span class="mono">AGENT_FIXES.md</span> — markers link findings to annotated regions.
 </footer>
 <script>
 (function(){

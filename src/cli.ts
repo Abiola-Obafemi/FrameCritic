@@ -4,11 +4,7 @@ import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { scanUrl } from "./engine/scanner.js";
-import { VIEWPORTS, type Viewport } from "./types.js";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import { parseArgs } from "./cli-args.js";
 
 function getVersion(): string {
   try {
@@ -49,121 +45,9 @@ Detectors:
 `);
 }
 
-function parseViewportList(raw: string | undefined): Viewport[] | null {
-  if (!raw) return null;
-  const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
-  if (!parts.length) return null;
-  const out: Viewport[] = [];
-  for (const p of parts) {
-    const lower = p.toLowerCase();
-    const builtin = VIEWPORTS.find((v) => v.label === lower);
-    if (builtin) {
-      out.push(builtin);
-      continue;
-    }
-    // custom WxH e.g. 390x844
-    const m = lower.match(/^(\d+)\s*x\s*(\d+)$/);
-    if (m) {
-      const w = Number(m[1]);
-      const h = Number(m[2]);
-      if (w >= 200 && w <= 4000 && h >= 200 && h <= 3000) {
-        out.push({ label: `${w}x${h}`, width: w, height: h });
-        continue;
-      }
-    }
-    console.error(`Unknown viewport "${p}". Known: ${VIEWPORTS.map((v) => v.label).join(", ")} or WxH like 390x844`);
-    process.exit(2);
-  }
-  // dedupe by label
-  const seen = new Set<string>();
-  return out.filter((v) => (seen.has(v.label) ? false : (seen.add(v.label), true)));
-}
-
-export type ParsedArgs = {
-  command: "scan" | "help" | "version";
-  url?: string;
-  output?: string;
-  open: boolean;
-  viewports?: Viewport[];
-  help: boolean;
-};
-
-/** Parse argv (without node+script) — exported for tests. */
-export function parseArgs(argv: string[]): ParsedArgs {
-  // handle --help / --version anywhere
-  if (argv.includes("--help") || argv.includes("-h")) {
-    return { command: "help", open: false, help: true };
-  }
-  if (argv.includes("--version") || argv.includes("-v")) {
-    return { command: "version", open: false, help: false };
-  }
-
-  // Strip flags to find positional args, but keep --output/--viewport values.
-  // We parse sequentially.
-  let command: ParsedArgs["command"] = "scan";
-  let url: string | undefined;
-  let output: string | undefined;
-  let open = false;
-  let viewports: Viewport[] | undefined;
-  const positional: string[] = [];
-
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "scan") {
-      command = "scan";
-      continue;
-    }
-    if (a === "--output" || a === "-o") {
-      output = argv[i + 1];
-      if (!output || output.startsWith("-")) {
-        console.error(`--output requires a directory path`);
-        process.exit(2);
-      }
-      i++;
-      continue;
-    }
-    if (a.startsWith("--output=")) {
-      output = a.slice("--output=".length);
-      continue;
-    }
-    if (a === "--viewport") {
-      const raw = argv[i + 1];
-      if (!raw || raw.startsWith("-")) {
-        console.error(`--viewport requires a value (e.g. mobile,tablet or 390x844)`);
-        process.exit(2);
-      }
-      viewports = parseViewportList(raw) ?? undefined;
-      i++;
-      continue;
-    }
-    if (a.startsWith("--viewport=")) {
-      viewports = parseViewportList(a.slice("--viewport=".length)) ?? undefined;
-      continue;
-    }
-    if (a === "--open") {
-      open = true;
-      continue;
-    }
-    if (a.startsWith("-")) {
-      console.error(`Unknown option "${a}". See --help.`);
-      process.exit(2);
-    }
-    positional.push(a);
-  }
-
-  if (positional.length > 0) url = positional[0];
-  if (positional.length > 1) {
-    // legacy: second positional as output dir
-    if (!output) output = positional[1];
-  }
-
-  return { command, url, output, open, viewports, help: false };
-}
-
 function openInBrowser(filePath: string): void {
   const abs = path.resolve(filePath);
   const url = abs.startsWith("/") ? `file://${abs}` : `file:///${abs.replace(/\\/g, "/")}`;
-  // Use OS open command; fallback to printing path
   const platform = process.platform;
   let cmd: string;
   let args: string[];
@@ -185,7 +69,6 @@ function openInBrowser(filePath: string): void {
 }
 
 function formatSummaryLine(label: string, value: string, color?: string): string {
-  // Simple ANSI if TTY
   const useColor = process.stdout.isTTY;
   if (!useColor || !color) return `  ${label.padEnd(18)} ${value}`;
   const codes: Record<string, string> = { red: "\x1b[31m", yellow: "\x1b[33m", green: "\x1b[32m", cyan: "\x1b[36m", dim: "\x1b[2m" };
@@ -208,7 +91,6 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
   console.log(`  ${statusColor === "red" ? "\x1b[31m✕\x1b[0m" : statusColor === "yellow" ? "\x1b[33m▲\x1b[0m" : "\x1b[32m✓\x1b[0m"} ${status} — ${summary.errors} error${summary.errors === 1 ? "" : "s"}, ${summary.warnings} warning${summary.warnings === 1 ? "" : "s"} · ${affected}/${results.length} viewports affected`);
   console.log("");
 
-  // Per-viewport table
   const header = `  ${"Viewport".padEnd(22)} ${"Findings".padEnd(12)} ${"Markers".padEnd(10)} Screenshot`;
   console.log(header);
   console.log(`  ${"─".repeat(22)} ${"─".repeat(12)} ${"─".repeat(10)} ${"─".repeat(24)}`);
@@ -224,7 +106,6 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
     }
   }
   console.log("");
-  // Top findings
   if (report.findings.length) {
     console.log(`  Findings (grouped):`);
     const byType = new Map<string, number>();
@@ -244,57 +125,64 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
   }
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
+// Only run main when invoked directly (not when imported for tests)
+const isMain = (() => {
+  const entry = process.argv[1] ?? "";
+  return entry.endsWith("cli.js") || entry.endsWith("cli.ts") || entry.endsWith("cli");
+})();
 
-const rawArgv = process.argv.slice(2);
-const parsed = parseArgs(rawArgv);
+if (isMain) {
+  const rawArgv = process.argv.slice(2);
+  let parsed;
+  try {
+    parsed = parseArgs(rawArgv);
+  } catch (e: any) {
+    console.error(`Error: ${e.message}`);
+    process.exit(2);
+  }
 
-if (parsed.command === "help" || parsed.help) {
-  printHelp();
-  process.exit(0);
+  if (parsed.command === "help" || parsed.help) {
+    printHelp();
+    process.exit(0);
+  }
+  if (parsed.command === "version") {
+    console.log(getVersion());
+    process.exit(0);
+  }
+
+  let url = parsed.url;
+  if (!url) {
+    console.error(`Error: missing <url>.\n`);
+    printHelp();
+    process.exit(1);
+  }
+
+  if (!/^https?:\/\//i.test(url)) url = "http://" + url;
+
+  const outDir = parsed.output ?? path.join(process.cwd(), "framecritic-out", `scan-${Date.now()}`);
+
+  console.log(`[FrameCritic] Scanning ${url}`);
+  if (parsed.viewports) {
+    console.log(`[FrameCritic] Viewports: ${parsed.viewports.map((v) => `${v.label} ${v.width}×${v.height}`).join(", ")}`);
+  }
+  console.log(`[FrameCritic] Output → ${outDir}`);
+
+  let report: Awaited<ReturnType<typeof scanUrl>>;
+  try {
+    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any });
+  } catch (e: any) {
+    console.error(`\n[FrameCritic] Scan failed: ${e?.message ?? String(e)}`);
+    process.exit(1);
+  }
+
+  printSummary(report, outDir);
+
+  if (parsed.open) {
+    const htmlPath = path.join(outDir, "report.html");
+    console.log(`[FrameCritic] Opening ${htmlPath}`);
+    openInBrowser(htmlPath);
+  }
+
+  if (report.summary.errors > 0) process.exit(2);
+  else process.exit(0);
 }
-if (parsed.command === "version") {
-  console.log(getVersion());
-  process.exit(0);
-}
-
-let url = parsed.url;
-if (!url) {
-  console.error(`Error: missing <url>.\n`);
-  printHelp();
-  process.exit(1);
-}
-
-// Normalize URL (allow localhost without scheme)
-if (!/^https?:\/\//i.test(url)) url = "http://" + url;
-
-const outDir = parsed.output ?? path.join(process.cwd(), "framecritic-out", `scan-${Date.now()}`);
-
-console.log(`[FrameCritic] Scanning ${url}`);
-if (parsed.viewports) {
-  console.log(`[FrameCritic] Viewports: ${parsed.viewports.map((v) => `${v.label} ${v.width}×${v.height}`).join(", ")}`);
-}
-console.log(`[FrameCritic] Output → ${outDir}`);
-
-let report: Awaited<ReturnType<typeof scanUrl>>;
-try {
-  report = await scanUrl({ url, outDir, viewports: parsed.viewports as any });
-} catch (e: any) {
-  console.error(`\n[FrameCritic] Scan failed: ${e?.message ?? String(e)}`);
-  process.exit(1);
-}
-
-printSummary(report, outDir);
-
-if (parsed.open) {
-  const htmlPath = path.join(outDir, "report.html");
-  console.log(`[FrameCritic] Opening ${htmlPath}`);
-  openInBrowser(htmlPath);
-}
-
-// Exit code signals quality gate
-if (report.summary.errors > 0) process.exit(2);
-else if (report.summary.warnings > 0) process.exit(0);
-else process.exit(0);
