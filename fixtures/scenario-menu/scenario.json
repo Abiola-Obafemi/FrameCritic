@@ -1,0 +1,7 @@
+{
+  "name": "open navigation",
+  "steps": [
+    { "action": "click", "selector": "#menuBtn" },
+    { "action": "wait", "ms": 300 }
+  ]
+}

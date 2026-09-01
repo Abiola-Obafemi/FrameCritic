@@ -21,6 +21,7 @@ export type Finding = {
   message: string;
   details?: Record<string, unknown>;
   markerIds?: number[];
+  scenario?: string;
 };
 
 export type AnnotationBox = {
@@ -67,6 +68,12 @@ export type PolicyDecision = {
   exitCode: number;
 };
 
+export type ScenarioInfo = {
+  name: string;
+  steps: Array<{ action: string; selector?: string; value?: string; key?: string; ms?: number }>;
+  file?: string;
+};
+
 export type ScanReport = {
   url: string;
   timestamp: string;
@@ -76,4 +83,5 @@ export type ScanReport = {
   summary: { total: number; errors: number; warnings: number; infos: number };
   suppression?: SuppressionSummary;
   policy?: PolicyDecision;
+  scenario?: ScenarioInfo | null;
 };

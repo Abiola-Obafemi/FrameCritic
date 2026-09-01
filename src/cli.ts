@@ -245,6 +245,9 @@ if (isMain) {
   if (parsed.viewports) {
     console.log(`[FrameCritic] Viewports: ${parsed.viewports.map((v) => `${v.label} ${v.width}×${v.height}`).join(", ")}`);
   }
+  if (parsed.scenario) {
+    console.log(`[FrameCritic] Scenario: ${parsed.scenario}`);
+  }
   console.log(`[FrameCritic] Output → ${outDir}`);
 
   const policyOpts = {
@@ -254,7 +257,7 @@ if (isMain) {
 
   let report: Awaited<ReturnType<typeof scanUrl>>;
   try {
-    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config, policy: policyOpts });
+    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config, policy: policyOpts, scenarioPath: parsed.scenario });
   } catch (e: any) {
     console.error(`\n[FrameCritic] Scan failed: ${e?.message ?? String(e)}`);
     process.exit(1);

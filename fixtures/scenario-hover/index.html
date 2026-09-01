@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Scenario Hover Fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui}
+header{padding:16px 20px;background:#111;color:#fff}
+.dropdown{position:relative;display:inline-block;margin:40px 20px}
+.dropbtn{background:#7c5cff;color:#fff;padding:10px 18px;border:0;border-radius:8px;cursor:pointer}
+.dropdown-content{display:none;position:absolute;top:100%;left:0;min-width:160px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10}
+.dropdown:hover .dropdown-content, .dropdown.open .dropdown-content{display:block}
+.dropdown-content a{display:block;padding:10px 14px;text-decoration:none;color:#111}
+.dropdown-content a:hover{background:#f3f4f6}
+.offscreen-hover{position:absolute;left:500px;top:100px;width:200px;background:yellow;padding:12px;display:none}
+.dropdown:hover .offscreen-hover, .dropdown.open .offscreen-hover{display:block}
+</style>
+</head>
+<body>
+<header><strong>HoverDemo</strong></header>
+<div class="dropdown" id="myDropdown">
+  <button class="dropbtn" id="hoverBtn">Hover me</button>
+  <div class="dropdown-content"><a href="#">Link 1</a><a href="#">Link 2</a><a href="#">Link 3</a></div>
+  <div class="offscreen-hover">I appear on hover but positioned far right</div>
+</div>
+<p style="padding:20px">Hover over button to reveal dropdown.</p>
+</body>
+</html>

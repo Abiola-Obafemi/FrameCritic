@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Scenario Menu Fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui}
+header{background:#111;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+#menuBtn{background:#7c5cff;color:#fff;border:0;padding:8px 14px;border-radius:8px;cursor:pointer}
+nav#mobileNav{position:fixed;top:60px;left:0;width:280px;height:calc(100vh - 60px);background:#1a1a2e;color:#fff;padding:20px;transform:translateX(-100%);transition:transform 0.2s}
+nav#mobileNav.open{transform:translateX(0)}
+nav#mobileNav a{display:block;padding:10px 0;color:#fff;text-decoration:none}
+.hero{padding:40px 20px}
+.wide{width:600px;background:#ff4d6a;color:#fff;padding:16px;margin:16px 20px;border-radius:10px}
+</style>
+</head>
+<body>
+<header><strong>MenuDemo</strong><button id="menuBtn" aria-expanded="false" aria-controls="mobileNav">Menu</button></header>
+<nav id="mobileNav" aria-hidden="true"><a href="#">Home</a><a href="#">Products</a><a href="#">Contact</a></nav>
+<div class="hero"><h1>Welcome</h1><p>Tap menu to open navigation.</p></div>
+<div class="wide">Wide banner 600px — overflows on mobile if menu not handled correctly</div>
+<script>
+document.getElementById('menuBtn').addEventListener('click',()=>{
+  const nav=document.getElementById('mobileNav');
+  const isOpen=nav.classList.toggle('open');
+  nav.setAttribute('aria-hidden', String(!isOpen));
+  document.getElementById('menuBtn').setAttribute('aria-expanded', String(isOpen));
+});
+</script>
+</body>
+</html>

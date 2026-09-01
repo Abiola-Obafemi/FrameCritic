@@ -7,6 +7,7 @@ import { generateHtmlReport } from "./report.js";
 import { generateAgentFixesMarkdown } from "./agentFixes.js";
 import { loadConfig, applyIgnoreRules } from "../config.js";
 import { evaluatePolicy } from "../policy.js";
+import { loadScenario, executeScenario } from "../scenario.js";
 
 export type ScanOptions = {
   url: string;
@@ -14,6 +15,7 @@ export type ScanOptions = {
   viewports?: typeof VIEWPORTS;
   configPath?: string;
   policy?: PolicyOptions;
+  scenarioPath?: string;
 };
 
 function normalizeUrl(input: string): string {
@@ -210,6 +212,9 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
   // Load config (throws on malformed / missing explicit)
   const { config, path: configPath } = loadConfig({ explicitPath: opts.configPath });
 
+  // Load scenario if provided (throws on malformed)
+  const scenario = opts.scenarioPath ? loadScenario(opts.scenarioPath) : null;
+
   await mkdir(outDir, { recursive: true });
   await mkdir(path.join(outDir, "screenshots"), { recursive: true });
 
@@ -282,7 +287,29 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
 
       await page.waitForTimeout(1000);
 
-      const findings = await collectPageFindings(page, vp.label, consoleErrors, pageErrors);
+      // Execute scenario if present, independently per viewport
+      let scenarioFindings: Finding[] = [];
+      if (scenario) {
+        const exec = await executeScenario(page, scenario);
+        // tag viewport and scenario name
+        for (const f of exec.findings) {
+          f.viewport = vp.label;
+          f.scenario = scenario.name;
+        }
+        scenarioFindings = exec.findings;
+        // allow a settle after scenario before detection
+        await page.waitForTimeout(300);
+      }
+
+      const rawFindings = await collectPageFindings(page, vp.label, consoleErrors, pageErrors);
+      // merge scenario failure findings + detection findings
+      const findings = [...scenarioFindings.map(f => ({ ...f })), ...rawFindings];
+      // tag scenario name on all findings when scenario active
+      if (scenario) {
+        for (const f of findings) {
+          if (!f.scenario) f.scenario = scenario.name;
+        }
+      }
 
       const seen = new Set<string>();
       const deduped: Finding[] = [];
@@ -366,6 +393,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     summary,
     suppression,
     policy: policyDecision,
+    scenario: scenario ? { name: scenario.name, steps: scenario.steps, file: opts.scenarioPath ?? null } as any : null,
   };
 
   await writeFile(path.join(outDir, "findings.json"), JSON.stringify(report, null, 2), "utf-8");

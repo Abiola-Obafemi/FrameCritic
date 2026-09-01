@@ -28,12 +28,14 @@ function renderFinding(f: Finding, idx: number): string {
     .map((id) => `<span class="marker-badge ${esc(f.severity)}" aria-label="Marker ${id}" title="Marker ${id}">#${id}</span>`)
     .join(" ");
   const hasMarkers = (f.markerIds?.length ?? 0) > 0;
+  const scenarioBadge = (f as any).scenario ? `<span class="vpill" style="border-color:var(--focus);color:var(--focus)">scenario: ${esc((f as any).scenario)}</span>` : ``;
   return `
   <article class="finding sev-${esc(f.severity)}" data-viewport="${esc(f.viewport)}" data-severity="${esc(f.severity)}" data-type="${esc(f.type)}" id="finding-${idx}" aria-labelledby="finding-title-${idx}">
     <div class="finding-head">
       ${badge(f.severity)}
       <span class="ftype" id="finding-title-${idx}">${esc(typeLabel(f.type))}</span>
       <span class="vpill">${esc(f.viewport)}</span>
+      ${scenarioBadge}
       ${hasMarkers ? `<span class="markers" aria-label="Markers ${esc(f.markerIds!.join(", "))}">${markerBadges}</span>` : ``}
     </div>
     <div class="msg">${esc(f.message)}</div>
@@ -247,6 +249,7 @@ export function generateHtmlReport(report: ScanReport): string {
     <div class="stat"><div class="k">Warnings</div><div class="v" style="color:var(--warn)">${summary.warnings}</div><div class="sub">${affectedViewports}/${totalViewports} viewports affected</div></div>
     <div class="stat"><div class="k">Infos</div><div class="v" style="color:var(--info)">${summary.infos}</div></div>
   </div>
+  ${report.scenario ? `<div role="note" aria-label="Scenario" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid #2a2a4a;background:#151530;color:#b8b8ff;font-size:12px"><strong>Scenario:</strong> <span class="mono">${esc(report.scenario.name)}</span> — ${report.scenario.steps.length} step(s)${report.scenario.file ? ` — <span class="mono">${esc(report.scenario.file)}</span>` : ""}<br><span class="mono">${esc(report.scenario.steps.map(s => s.action + (s.selector ? ` ${s.selector}` : s.ms ? ` wait ${s.ms}ms` : s.key ? ` press ${s.key}` : "")).join(" → "))}</span></div>` : ``}
   ${report.policy ? `<div role="note" aria-label="Policy decision" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid ${report.policy.failed ? "#4a1e2e" : "#1a4a2e"};background:${report.policy.failed ? "#2a1320" : "#0f2a1a"};color:${report.policy.failed ? "var(--err)" : "var(--ok)"};font-size:12px;font-weight:600">Policy: fail-on=${esc(report.policy.failOn)}${report.policy.maxWarnings !== undefined ? `, max-warnings=${report.policy.maxWarnings}` : ""} → ${report.policy.failed ? "FAIL" : "PASS"} — ${esc(report.policy.reason)} (exit ${report.policy.exitCode})</div>` : ``}
   <div class="compact">
     <span class="compact-pill err"><strong>${summary.errors}</strong> errors</span>

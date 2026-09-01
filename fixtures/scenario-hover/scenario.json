@@ -1,0 +1,7 @@
+{
+  "name": "hover dropdown",
+  "steps": [
+    { "action": "hover", "selector": "#hoverBtn" },
+    { "action": "wait", "ms": 300 }
+  ]
+}
