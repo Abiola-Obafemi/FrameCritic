@@ -1,34 +1,181 @@
-# FrameCritic v0.1 — local visual QA
+# FrameCritic v0.1 — local visual QA for AI-built web apps
 
-Local-first visual inspector for AI-built web apps. No accounts, no cloud, no AI calls.
+> **Local-first.** No accounts. No cloud. No AI calls.
+> Give FrameCritic a `localhost` or public URL — it captures, detects layout and loading issues, and writes evidence you (or an agent) can act on.
 
-## What it does
+![FrameCritic report screenshot — annotated mobile viewport showing 6 markers](framecritic-out/scan-demo-mobile-annotated-placeholder.png)
+*Annotated mobile capture from the intentionally buggy demo — purple overflow banner (#1), offscreen chip (#2), overlap on badges (#3), broken image (#4). The annotated PNG is never enough alone; `findings.json` and `AGENT_FIXES.md` carry the structured evidence.*
 
-- Accepts a `localhost` or public URL via dashboard or CLI
-- Captures screenshots at **390×844** (mobile), **768×1024** (tablet), **1440×900** (desktop) via Playwright
-- Detects: horizontal overflow, elements outside viewport, overlapping visible elements, broken images, console/page errors
-- Produces `screenshots/`, `findings.json`, and a readable `report.html`
+---
 
-## Run
+## Problem
+
+AI coding agents now ship whole front-ends in one pass. The result *looks* done until someone resizes the window:
+
+- a 600 px banner that scrolls horizontally on mobile
+- a tooltip rendered at `left: 1450px` and clipped on tablet
+- two badges stacked with `position: absolute` that visually collide
+- an `img` with a 404 and no fallback
+- a `console.error` or failed `fetch` that never surfaces in a chat log
+
+Manual resizing and “looks good to me” don’t scale. Teams building with agents need **visual evidence**, not another promise.
+
+## Why FrameCritic exists
+
+FrameCritic is a **visual evidence engine** for the loop:
+
+```
+agent builds → FrameCritic scans → evidence (screenshots + JSON + markdown) → agent / human fixes → re-scan
+```
+
+- runs **locally** with Playwright (Chromium)
+- outputs to `framecritic-out/scan-<timestamp>/` — no upload
+- produces both **human** and **agent** artifacts from one run
+- checks the reports that matter for AI-built products first (layout, overflow, visibility), not pixel-perfect diffing
+
+If Film Mode ever lands, it will reuse the same capture/detection core. For now, web only.
+
+## Quick start
+
+Prerequisites: Node ≥ 18.
 
 ```bash
+git clone https://github.com/Abiola-Obafemi/FrameCritic.git
+cd FrameCritic
 npm install
 npx playwright install chromium
-
-# Dashboard (recommended)
 npm run build
-npm start
-# → http://localhost:3030
 
-# CLI
-npm run scan -- http://localhost:3001
+# Option A — CLI (recommended for agents / CI)
+npx framecritic scan http://localhost:3001
+# also:
+#   --output ./my-out          custom directory (default: framecritic-out/scan-<timestamp>)
+#   --viewport mobile,desktop  pick viewports (mobile=390×844, tablet=768×1024, desktop=1440×900, or WxH like 390x844)
+#   --open                     open report.html after scan
+#   --help                     usage
+
+# Option B — interactive dashboard
+npm start
+# → http://localhost:3030  paste a URL, click “Scan”, browse reports at /reports/<scan>/report.html
 ```
 
-## Demo verification
+### Demo (intentionally buggy)
 
 ```bash
-node demo-app/server.js        # fixture on http://localhost:3001 (intentionally buggy)
-npm run scan -- http://localhost:3001
+# terminal 1: start the fixture
+node demo-app/server.js
+# → http://localhost:3001  (wide banner, offscreen element, overlapping badges, broken image, console/page errors)
+
+# terminal 2: scan it
+npm run build
+node dist/cli.js scan http://localhost:3001 --output framecritic-out/demo
+# artifacts:
+#   framecritic-out/demo/screenshots/mobile-390x844.png
+#   framecritic-out/demo/screenshots/mobile-390x844-annotated.png  (numbered markers)
+#   framecritic-out/demo/findings.json
+#   framecritic-out/demo/report.html
+#   framecritic-out/demo/AGENT_FIXES.md
 ```
 
-Artifacts go to `framecritic-out/scan-<timestamp>/`.
+## Screenshots
+
+Captures from `demo-app` (Dark dashboard in `public/index.html`; light, evidence-oriented report in `report.html`):
+
+| Viewport | Clean | Annotated |
+|---|---|---|
+| **mobile 390×844** | `screenshots/mobile-390x844.png` — full-page, clipped banner and offscreen yellow chip visible at the right edge | `mobile-390x844-annotated.png` — 6 markers: #1–2 overflow, #3–4 offscreen, #5 overlap, #6 broken image |
+| **tablet 768×1024** | `tablet-768x1024.png` | `tablet-768x1024-annotated.png` — 4 markers |
+| **desktop 1440×900** | `desktop-1440x900.png` | `desktop-1440x900-annotated.png` — 4 markers |
+
+Report highlights:
+- **Compact summary:** `18 errors / 12 warnings / 3/3 viewports affected`
+- **Filters:** viewport · severity · type (keyboard usable, live region announces `visible / total`)
+- **Annotated ↔ Clean toggle** with `role="tablist"` and keyboard arrows/Home/End support
+
+> No screenshots are shipped in the npm package. Run the demo to generate your own under `framecritic-out/`.
+
+## Architecture overview
+
+```
+framecritic/
+├── src/
+│   ├── cli.ts            — polished CLI (bin: framecritic, scan <url>, --output/--viewport/--open/--help)
+│   ├── cli-args.ts       — argument parser (exported for tests)
+│   ├── server.ts         — Express dashboard (POST /api/scan, GET /reports)
+│   ├── types.ts          — Viewport, Finding, AnnotationBox, ScanReport
+│   └── engine/
+│       ├── scanner.ts    — Playwright capture @ deviceScaleFactor 1, annotation injection, artifact writer
+│       ├── detect.ts     — in-page script (scrollWidth, getBoundingClientRect, overlap test, broken images)
+│       ├── report.ts     — accessible HTML report with filters/tabs/summary
+│       └── agentFixes.ts — AGENT_FIXES.md generation per finding
+├── public/index.html     — local dashboard (no build step)
+├── demo-app/             — intentionally broken fixture (not shipped)
+├── tests (co-located)    — *.test.ts → dist/**/*.test.js, run via node --test
+└── framecritic-out/      — per-scan artifacts (ignored in git/npm)
+```
+
+**Flow per viewport:**
+
+1. Playwright `newContext({ viewport })` → `page.goto(url, waitUntil: domcontentloaded)` + short `networkidle` settle → collect `console` / `pageerror` / failed `response` listeners
+2. `getDetectionScript()` runs in-page (no Node DOM): measures `document.documentElement.scrollWidth`, walks `querySelectorAll('*')`, records `rect` and `cssPath` for offenders
+3. Deduplication on `type+message` for console/page errors
+4. `buildAnnotationBoxes()` assigns sequential `markerIds` per viewport, stores `AnnotationBox[]`
+5. Clean screenshot → inject overlay (`#__fc_overlay`) → annotated screenshot → remove overlay
+6. Write `findings.json` (full `ScanReport`), `report.html` (via `generateHtmlReport`), `AGENT_FIXES.md` (via `generateAgentFixesMarkdown`)
+
+## Current detectors
+
+| Detector | Severity | Evidence captured | Marker? | Notes |
+|---|---|---|---|---|
+| **horizontal-overflow** | error | `scrollWidth vs viewportWidth`, overflow amount, `offenders[]` with `selector`, `width`, `right`, `rect` | ✓ one per offender | Flags when `scrollWidth > viewportWidth + 1`; capped at 12 offenders per viewport |
+| **outside-viewport** | warning (error if >5 elements) | `elements[]` with `rect`, `clipped` px, `selector` | ✓ per element | `right > vw+4` or `left < -4` and `clipped > 8`, max 20 |
+| **overlapping-elements** | warning (>6 pairs → error) | `pairs[]` with `a`, `b`, `rectA`, `rectB`, `overlap {x,y,w,h,area,ratio}` | ✓ at overlap region (`x,y,w,h`) | Heuristic: `ratio > 0.20` or `area > 2500`, skips ancestor/descendant, candidates capped at 180, sorted text/bg/border heuristic |
+| **broken-image** | error | `images[]` with `src`, `alt`, `selector`, `rect` | ✓ per broken image | `!complete || naturalWidth===0` with `src`; includes collapsed `rect` fallback |
+| **console-error** | error | `text`, `location {url,line,col}` | ✗ | All `console.type==="error"` |
+| **page-error** | error / warning (status `>=500` → error else warning) | `status`, `url` or `stack`/`message` | ✗ | Failed `response.status >=400` (except `favicon.ico` 404), `pageerror` events, `page.goto` timeout |
+
+Each detector runs independently per viewport; the same page can be clean on desktop and overflow on mobile. The demo triggers all six.
+
+## Limitations (v0.1, honest)
+
+- **Heuristics, not proof:** Overflow and overlap are geometry-based and can mis-fire on intentional designs (offscreen drawers, decorative overlaps). Always confirm the selector in source.
+- **Fixed viewports only:** Three presets (`mobile`, `tablet`, `desktop`) plus custom `WxH` via `--viewport`. No full responsive sweep or element breakpoints yet.
+- **Chromium only:** Playwright `chromium` is required; other browsers and device scale factors are not covered.
+- **Static captures:** No interaction (scroll, hover, open modal) before detection. A drawer that only overflows when opened won’t be caught.
+- **Performance cap:** Overlap scan samples at most 180 candidates and 15 pairs per viewport to stay fast; dense pages may hide additional overlaps.
+- **Accessibility is for the report, not the target:** The *report* itself is now semantic, keyboard-navigable, focus-visible, labeled, contrast-improved (muted `#b8c0d4` vs `#0b0e14`), and has descriptive image alt text. The target page’s a11y is not yet diagnosed.
+- **No pixel diff:** FrameCritic finds structural issues, not design fidelity.
+- **Local artifacts:** `framecritic-out/` is local and untracked; it is not uploaded or shared unless you do.
+
+## Roadmap
+
+Planned, not promised:
+
+- [ ] **Film Mode** — capture interactive flows (open drawer, hover card, scroll) and run the same detectors per frame
+- [ ] More detectors: missing `alt`, empty interactive labels, large layout shift candidates, truncated text, z-order traps
+- [ ] `framecritic compare` — diff two scans (`main` vs PR) with a change-aware report
+- [ ] Budget thresholds and CI gate (`--fail-on error` already exits 2; configurable `--max-warnings` pending)
+- [ ] Ignore file (`.framecriticignore`) per selector/viewport
+- [ ] Optional HTML validation and axe pass for the *target* page
+
+Out of scope for v0.1: accounts, billing, cloud storage, AI inference, proxying, multi-tenant hosting.
+
+## AI-use disclosure
+
+- **Runtime:** FrameCritic does **not** call any AI API at scan time. All detectors are deterministic Playwright + DOM math.
+- **Build-time assistance:** The codebase was drafted with an AI coding assistant under human direction (including detectors, report accessibility, CLI ergonomics, and `AGENT_FIXES.md` templates). Every finding rendered in the report is measured, not generated.
+- **Agent fix suggestions:** `AGENT_FIXES.md` offers *“suggested investigation”* prompts per finding (e.g., “Check fixed width on `body > div.wide-banner`”). They deliberately avoid claiming a definitive fix when evidence is insufficient. The selector and `rect` are evidence; the prose is a nudge to look in the right file.
+
+---
+
+## Development
+
+```bash
+npm run build   # tsc → dist/
+npm test        # node --test dist/**/*.test.js  (32 tests: CLI parsing, overflow/overlap/broken/offscreen, annotations, report+AGENT_FIXES, a11y/axe)
+npm pack --dry-run  # verify tarball: 36 files, 34 kB package, 136 kB unpacked — no demo-app, framecritic-out, src, or .env
+```
+
+**Project conventions:** keep `public/` hand-written, `dist/` is build output, `framecritic-out/` is per-scan and ignored, `NIGHT_SHIFT.md` is the historical backlog and not shipped. Versioning is pre-1.0 (`0.1.0`) — breaking changes without major bump until `1.0.0`.
+
+License: MIT © 2026 Abiola Obafemi
