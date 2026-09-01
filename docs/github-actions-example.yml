@@ -1,0 +1,70 @@
+# Example: use FrameCritic in another project's GitHub Actions
+# Copy this workflow to your project's .github/workflows/visual-qa.yml
+# and adjust the start/wait/scan steps for your stack.
+
+name: Visual QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  visual-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build --if-present
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Install FrameCritic
+        run: npm install -D framecritic
+        # or: npm install framecritic@latest
+        # or from tarball: npm install ./framecritic-0.1.0.tgz
+
+      - name: Start application
+        run: |
+          # Start your app in background. Adjust command/port for your project.
+          # Example for a Next.js / Vite / Express app on port 3000:
+          npm start &
+          # If your app needs a different command, replace the line above.
+
+      - name: Wait for application
+        run: |
+          # Poll until the app responds (10s timeout example)
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000 >/dev/null; then
+              echo "App is up"
+              break
+            fi
+            echo "Waiting for app... $i"
+            sleep 2
+          done
+          curl -fsS http://localhost:3000 >/dev/null
+
+      - name: Scan with FrameCritic
+        run: |
+          npx framecritic scan http://localhost:3000 --fail-on error --max-warnings 5 --json-summary
+
+      - name: Upload FrameCritic artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: framecritic-report
+          path: |
+            framecritic-out/
+            comparison.json
+            comparison.html
+          if-no-files-found: warn
