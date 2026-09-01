@@ -1,7 +1,7 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult } from "../types.js";
+import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox } from "../types.js";
 import { collectPageFindings } from "./detect.js";
 import { generateHtmlReport } from "./report.js";
 
@@ -15,6 +15,185 @@ function normalizeUrl(input: string): string {
   let u = input.trim();
   if (!/^https?:\/\//i.test(u)) u = "http://" + u;
   return u;
+}
+
+function buildAnnotationBoxes(findings: Finding[]): { boxes: AnnotationBox[] } {
+  const boxes: AnnotationBox[] = [];
+  let nextId = 1;
+  for (const f of findings) {
+    const ids: number[] = [];
+    const d: any = f.details ?? {};
+    if (f.type === "horizontal-overflow") {
+      for (const o of d.offenders ?? []) {
+        if (o?.rect) {
+          boxes.push({
+            id: nextId,
+            x: o.rect.x,
+            y: o.rect.y,
+            w: o.rect.w,
+            h: o.rect.h,
+            type: f.type,
+            severity: f.severity,
+            label: "overflow",
+            selector: o.selector,
+          });
+          ids.push(nextId++);
+        }
+      }
+    } else if (f.type === "outside-viewport") {
+      for (const e of d.elements ?? []) {
+        if (e?.rect) {
+          boxes.push({
+            id: nextId,
+            x: e.rect.x,
+            y: e.rect.y,
+            w: e.rect.w,
+            h: e.rect.h,
+            type: f.type,
+            severity: f.severity,
+            label: "offscreen",
+            selector: e.selector,
+          });
+          ids.push(nextId++);
+        }
+      }
+    } else if (f.type === "overlapping-elements") {
+      for (const p of d.pairs ?? []) {
+        const ov = p.overlap;
+        // ov now has x,y,w,h for the overlap region
+        if (ov && typeof ov.w === "number" && typeof ov.h === "number" && ov.w > 0 && ov.h > 0) {
+          const x = typeof ov.x === "number" ? ov.x : 0;
+          const y = typeof ov.y === "number" ? ov.y : 0;
+          boxes.push({
+            id: nextId,
+            x,
+            y,
+            w: ov.w,
+            h: ov.h,
+            type: f.type,
+            severity: f.severity,
+            label: "overlap",
+            selector: `${p.a} ↔ ${p.b}`,
+          });
+          ids.push(nextId++);
+        }
+      }
+    } else if (f.type === "broken-image") {
+      for (const img of d.images ?? []) {
+        if (img?.rect && img.rect.w > 0 && img.rect.h > 0) {
+          boxes.push({
+            id: nextId,
+            x: img.rect.x,
+            y: img.rect.y,
+            w: img.rect.w,
+            h: img.rect.h,
+            type: f.type,
+            severity: f.severity,
+            label: "broken-img",
+            selector: img.selector,
+          });
+          ids.push(nextId++);
+        } else if (img?.rect) {
+          // Fallback: small box at rect position even if collapsed
+          boxes.push({
+            id: nextId,
+            x: img.rect.x,
+            y: img.rect.y,
+            w: Math.max(img.rect.w, 40),
+            h: Math.max(img.rect.h, 32),
+            type: f.type,
+            severity: f.severity,
+            label: "broken-img",
+            selector: img.selector,
+          });
+          ids.push(nextId++);
+        }
+      }
+    }
+    if (ids.length) f.markerIds = ids;
+  }
+  return { boxes };
+}
+
+async function injectAnnotations(page: Page, boxes: AnnotationBox[]): Promise<void> {
+  if (!boxes.length) return;
+  await page.evaluate((boxes: AnnotationBox[]) => {
+    const existing = document.getElementById("__fc_overlay");
+    if (existing) existing.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "__fc_overlay";
+    overlay.style.position = "absolute";
+    overlay.style.left = "0";
+    overlay.style.top = "0";
+    overlay.style.width = Math.max(document.documentElement.scrollWidth, window.innerWidth) + "px";
+    overlay.style.height = Math.max(document.documentElement.scrollHeight, window.innerHeight) + "px";
+    overlay.style.pointerEvents = "none";
+    overlay.style.zIndex = "2147483647";
+    overlay.style.overflow = "visible";
+
+    for (const b of boxes as any[]) {
+      const box = document.createElement("div");
+      const isErr = b.severity === "error";
+      const color = isErr ? "#ff4d6a" : "#ffb020";
+      const bg = isErr ? "rgba(255,77,106,0.14)" : "rgba(255,176,32,0.16)";
+      box.style.position = "absolute";
+      box.style.left = b.x + "px";
+      box.style.top = b.y + "px";
+      box.style.width = Math.max(b.w, 12) + "px";
+      box.style.height = Math.max(b.h, 12) + "px";
+      box.style.border = `3px solid ${color}`;
+      box.style.background = bg;
+      box.style.borderRadius = "8px";
+      box.style.boxShadow = `0 0 0 3px ${isErr ? "rgba(255,77,106,0.28)" : "rgba(255,176,32,0.28)"}, 0 4px 16px rgba(0,0,0,0.25)`;
+      box.style.boxSizing = "border-box";
+
+      const badge = document.createElement("div");
+      badge.textContent = String(b.id);
+      badge.style.position = "absolute";
+      badge.style.left = "-12px";
+      badge.style.top = "-14px";
+      badge.style.width = "28px";
+      badge.style.height = "28px";
+      badge.style.borderRadius = "50%";
+      badge.style.background = color;
+      badge.style.color = isErr ? "#fff" : "#111";
+      badge.style.fontFamily = "ui-sans-system, -apple-system, Segoe UI, Roboto, sans-serif";
+      badge.style.fontWeight = "800";
+      badge.style.fontSize = "14px";
+      badge.style.lineHeight = "28px";
+      badge.style.textAlign = "center";
+      badge.style.boxShadow = "0 2px 10px rgba(0,0,0,0.35)";
+      badge.style.border = "2px solid #fff";
+      badge.dataset.fcId = String(b.id);
+
+      const label = document.createElement("div");
+      label.textContent = `${b.id} · ${b.label}`;
+      label.style.position = "absolute";
+      label.style.left = "20px";
+      label.style.top = "-10px";
+      label.style.background = "#0b0e14";
+      label.style.color = "#fff";
+      label.style.fontFamily = "ui-monospace, monospace";
+      label.style.fontSize = "10px";
+      label.style.fontWeight = "700";
+      label.style.padding = "2px 6px";
+      label.style.borderRadius = "6px";
+      label.style.border = `1px solid ${color}`;
+      label.style.whiteSpace = "nowrap";
+      label.style.lineHeight = "14px";
+
+      box.appendChild(badge);
+      box.appendChild(label);
+      overlay.appendChild(box);
+    }
+    document.body.appendChild(overlay);
+  }, boxes as any);
+}
+
+async function removeAnnotations(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    document.getElementById("__fc_overlay")?.remove();
+  });
 }
 
 export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
@@ -44,8 +223,6 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
       page.on("console", (msg) => {
         if (msg.type() === "error") {
           const text = msg.text();
-          // Filter severe errors — ignore noisy warnings that are console.error but trivial
-          // We keep all console.error entries as findings (spec says severe console/page errors)
           consoleErrors.push({
             type: "console-error",
             severity: "error",
@@ -66,13 +243,10 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
         });
       });
 
-      // Also capture failed requests (4xx/5xx) as severe errors
       page.on("response", (res) => {
         const status = res.status();
         const reqUrl = res.url();
-        // Ignore non-document third-party noise? Keep all 4xx/5xx on page's own resources
         if (status >= 400) {
-          // ignore favicon 404 spam unless it's the main page
           if (reqUrl.endsWith("favicon.ico") && status === 404) return;
           pageErrors.push({
             type: "page-error",
@@ -86,10 +260,8 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
 
       try {
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
-        // Wait briefly for network to settle without hard-failing on pending third-party requests
         await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
       } catch (e: any) {
-        // Record navigation failure and still try to continue
         pageErrors.push({
           type: "page-error",
           severity: "error",
@@ -99,13 +271,10 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
         });
       }
 
-      // Give images a moment to load/fail
       await page.waitForTimeout(1000);
 
       const findings = await collectPageFindings(page, vp.label, consoleErrors, pageErrors);
 
-      // Deduplicate console/page errors that may have duplicated across event handlers — keep as-is for now (they're already per-page)
-      // But deduplicate failed-request duplicates
       const seen = new Set<string>();
       const deduped: Finding[] = [];
       for (const f of findings) {
@@ -117,13 +286,30 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
         deduped.push(f);
       }
 
+      // Build annotation boxes and attach markerIds to findings
+      const { boxes } = buildAnnotationBoxes(deduped);
+
       const screenshotRel = `screenshots/${vp.label}-${vp.width}x${vp.height}.png`;
+      const annotatedRel = boxes.length ? `screenshots/${vp.label}-${vp.width}x${vp.height}-annotated.png` : undefined;
       const screenshotAbs = path.join(outDir, screenshotRel);
+      const annotatedAbs = annotatedRel ? path.join(outDir, annotatedRel) : null;
+
+      // Clean screenshot first
       await page.screenshot({ path: screenshotAbs, fullPage: true });
+
+      // Annotated screenshot (if there are boxes)
+      if (boxes.length && annotatedAbs) {
+        await injectAnnotations(page, boxes);
+        await page.waitForTimeout(250);
+        await page.screenshot({ path: annotatedAbs, fullPage: true });
+        await removeAnnotations(page);
+      }
 
       const vr: ViewportResult = {
         viewport: vp,
         screenshot: screenshotRel,
+        annotatedScreenshot: annotatedRel,
+        annotations: boxes,
         findings: deduped,
       };
       results.push(vr);
@@ -151,10 +337,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     summary,
   };
 
-  // Write findings.json
   await writeFile(path.join(outDir, "findings.json"), JSON.stringify(report, null, 2), "utf-8");
-
-  // Write HTML report
   const html = generateHtmlReport(report);
   await writeFile(path.join(outDir, "report.html"), html, "utf-8");
 

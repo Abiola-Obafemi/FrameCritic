@@ -22,16 +22,22 @@ function typeLabel(t: Finding["type"]): string {
   return map[t] ?? t;
 }
 
-function renderFinding(f: Finding): string {
+function renderFinding(f: Finding, idx: number): string {
   const detailsJson = f.details ? JSON.stringify(f.details, null, 2) : "";
+  const markerBadges = (f.markerIds ?? [])
+    .map((id) => `<span class="marker-badge ${esc(f.severity)}" title="Marker ${id}">#${id}</span>`)
+    .join(" ");
+  const hasMarkers = (f.markerIds?.length ?? 0) > 0;
   return `
-  <div class="finding sev-${esc(f.severity)}">
+  <div class="finding sev-${esc(f.severity)}" data-viewport="${esc(f.viewport)}" data-severity="${esc(f.severity)}" data-type="${esc(f.type)}" id="finding-${idx}">
     <div class="finding-head">
       ${badge(f.severity)}
       <span class="ftype">${esc(typeLabel(f.type))}</span>
       <span class="vpill">${esc(f.viewport)}</span>
+      ${hasMarkers ? `<span class="markers">${markerBadges}</span>` : ``}
     </div>
     <div class="msg">${esc(f.message)}</div>
+    ${hasMarkers ? `<div class="marker-hint">Markers ${esc(f.markerIds!.join(", "))} on annotated screenshot</div>` : ``}
     ${detailsJson ? `<details><summary>Details</summary><pre>${esc(detailsJson)}</pre></details>` : ``}
   </div>`;
 }
@@ -41,31 +47,76 @@ export function generateHtmlReport(report: ScanReport): string {
 
   const hasFindings = findings.length > 0;
   const statusClass = summary.errors > 0 ? "status-fail" : summary.warnings > 0 ? "status-warn" : "status-pass";
-
   const statusText = summary.errors > 0 ? "Issues Found" : summary.warnings > 0 ? "Warnings" : "No Issues";
 
+  const affectedViewports = results.filter((r) => r.findings.length > 0).length;
+  const affectedByErrors = results.filter((r) => r.findings.some((f) => f.severity === "error")).length;
+  const totalViewports = results.length;
+
+  const uniqueTypes = Array.from(new Set(findings.map((f) => f.type))).sort();
+  const viewports = report.viewports;
+
   const vpCards = results
-    .map(
-      (r) => `
-    <div class="vp-card">
+    .map((r) => {
+      const annotated = r.annotatedScreenshot;
+      const clean = r.screenshot;
+      const annCount = r.annotations?.length ?? 0;
+      const shotHtml = annotated
+        ? `<div class="shot-tabs" data-vp="${esc(r.viewport.label)}">
+            <div class="tab-bar">
+              <button class="tab active" data-tab="annotated">Annotated · ${annCount} marker${annCount === 1 ? "" : "s"}</button>
+              <button class="tab" data-tab="clean">Clean</button>
+              <a class="tab-link" href="${esc(annotated)}" target="_blank" rel="noopener">open ↗</a>
+            </div>
+            <div class="shot-wrap">
+              <img class="shot-img shot-annotated" src="${esc(annotated)}" alt="Annotated ${esc(r.viewport.label)}" loading="lazy" />
+              <img class="shot-img shot-clean" src="${esc(clean)}" alt="Clean ${esc(r.viewport.label)}" loading="lazy" style="display:none" />
+            </div>
+          </div>`
+        : `<div class="shot-wrap">
+            <a href="${esc(clean)}" target="_blank" rel="noopener"><img src="${esc(clean)}" alt="Screenshot ${esc(r.viewport.label)}" loading="lazy" /></a>
+           </div>`;
+
+      const legend = r.annotations?.length
+        ? `<div class="legend">
+            <div class="legend-title">Markers on this viewport</div>
+            <div class="legend-grid">
+              ${r.annotations
+                .map(
+                  (a) => `
+                <div class="legend-item sev-${esc(a.severity)}">
+                  <span class="legend-id ${esc(a.severity)}">#${a.id}</span>
+                  <span class="legend-type">${esc(typeLabel(a.type))}</span>
+                  <span class="legend-label">${esc(a.label)}</span>
+                  ${a.selector ? `<span class="legend-sel mono" title="${esc(a.selector)}">${esc(a.selector.length > 42 ? a.selector.slice(0, 42) + "…" : a.selector)}</span>` : ""}
+                </div>`
+                )
+                .join("")}
+            </div>
+          </div>`
+        : ``;
+
+      const findingsHtml = r.findings.length
+        ? r.findings.map((f) => renderFinding(f, findings.indexOf(f))).join("\n")
+        : `<div class="no-issues">No issues at this viewport.</div>`;
+
+      return `
+    <div class="vp-card" data-viewport="${esc(r.viewport.label)}">
       <div class="vp-card-head">
         <h3>${esc(r.viewport.label)} — ${r.viewport.width}×${r.viewport.height}</h3>
-        <span class="count">${r.findings.length} finding${r.findings.length === 1 ? "" : "s"}</span>
+        <span class="count">${r.findings.length} finding${r.findings.length === 1 ? "" : "s"}${annCount ? ` · ${annCount} marker${annCount === 1 ? "" : "s"}` : ""}</span>
       </div>
-      <div class="shot-wrap">
-        <a href="${esc(r.screenshot)}" target="_blank" rel="noopener">
-          <img src="${esc(r.screenshot)}" alt="Screenshot ${esc(r.viewport.label)}" loading="lazy" />
-        </a>
-      </div>
+      ${shotHtml}
+      ${legend}
       <div class="vp-findings">
-        ${r.findings.length ? r.findings.map(renderFinding).join("\n") : `<div class="no-issues">No issues at this viewport.</div>`}
+        ${findingsHtml}
       </div>
-    </div>`
-    )
+    </div>`;
+    })
     .join("\n");
 
   const allFindingsHtml = hasFindings
-    ? findings.map(renderFinding).join("\n")
+    ? findings.map((f, i) => renderFinding(f, i)).join("\n")
     : `<div class="no-issues" style="padding:18px">No issues detected across all viewports.</div>`;
 
   return `<!doctype html>
@@ -89,11 +140,25 @@ export function generateHtmlReport(report: ScanReport): string {
   .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;min-width:140px;flex:1}
   .stat .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
   .stat .v{font-size:22px;font-weight:700;margin-top:2px}
+  .stat .sub{font-size:11px;color:var(--muted);margin-top:2px}
   .status{margin-top:16px;display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;font-weight:600;font-size:13px;border:1px solid var(--border)}
   .status-fail{background:#2a1320;color:var(--err);border-color:#4a1e2e}
   .status-warn{background:#2a2210;color:var(--warn);border-color:#4a3a10}
   .status-pass{background:#0f2a1a;color:var(--ok);border-color:#1a4a2e}
   .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  /* compact summary */
+  .compact{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .compact-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid var(--border);background:var(--card);font-size:12px;font-weight:600}
+  .compact-pill.err{border-color:#4a1e2e;color:var(--err)}
+  .compact-pill.warn{border-color:#4a3a10;color:var(--warn)}
+  .compact-pill.vp{color:var(--muted)}
+  .compact-pill strong{color:inherit}
+  /* filters */
+  .filters{position:sticky;top:0;z-index:10;background:rgba(11,14,20,0.92);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+  .filters label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;flex-direction:column;gap:4px;flex:1;min-width:140px}
+  .filters select{appearance:none;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 10px;font-size:13px}
+  .filters button{padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-weight:600;cursor:pointer}
+  .filters .results-count{font-size:12px;color:var(--muted);align-self:center;margin-left:auto}
   main{max-width:1200px;margin:0 auto;padding:18px 20px 40px}
   h2{font-size:18px;margin:28px 0 12px;letter-spacing:-.01em}
   .grid{display:grid;grid-template-columns:1fr;gap:18px}
@@ -103,13 +168,33 @@ export function generateHtmlReport(report: ScanReport): string {
   .vp-card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--card2)}
   .vp-card-head h3{margin:0;font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:var(--text)}
   .count{font-size:12px;color:var(--muted);background:#0f1422;padding:4px 8px;border-radius:999px;border:1px solid var(--border)}
-  .shot-wrap{background:#0a0e1a;text-align:center;max-height:420px;overflow:auto;border-bottom:1px solid var(--border)}
+  .shot-tabs{border-bottom:1px solid var(--border)}
+  .tab-bar{display:flex;gap:6px;align-items:center;padding:8px 10px;background:var(--card2);border-bottom:1px solid var(--border)}
+  .tab{appearance:none;border:1px solid var(--border);background:#0f1422;color:var(--muted);padding:6px 10px;border-radius:999px;font-size:11px;font-weight:700;cursor:pointer}
+  .tab.active{background:var(--text);color:var(--bg);border-color:var(--text)}
+  .tab-link{margin-left:auto;font-size:11px;color:var(--muted);text-decoration:none;border:1px solid var(--border);padding:6px 10px;border-radius:999px;background:#0f1422}
+  .tab-link:hover{color:var(--text)}
+  .shot-wrap{background:#0a0e1a;text-align:center;max-height:460px;overflow:auto;border-bottom:1px solid var(--border)}
   .shot-wrap img{max-width:100%;height:auto;display:block}
-  .vp-findings{padding:12px;display:flex;flex-direction:column;gap:10px;max-height:360px;overflow:auto}
+  .shot-img{max-width:100%}
+  .legend{padding:10px 12px;background:#0f1422;border-bottom:1px solid var(--border)}
+  .legend-title{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px}
+  .legend-grid{display:flex;flex-direction:column;gap:4px}
+  .legend-item{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;border-left:3px solid transparent;padding:3px 6px;border-radius:6px}
+  .legend-item.sev-error{border-left-color:var(--err);background:rgba(255,77,106,0.08)}
+  .legend-item.sev-warning{border-left-color:var(--warn);background:rgba(255,176,32,0.08)}
+  .legend-id{font-weight:800;padding:1px 6px;border-radius:999px;border:1px solid transparent;font-size:11px}
+  .legend-id.error{background:#3a1320;color:var(--err);border-color:#5a1e2e}
+  .legend-id.warning{background:#3a2d10;color:var(--warn);border-color:#6a4a10}
+  .legend-type{font-weight:600;color:var(--text)}
+  .legend-label{color:var(--muted)}
+  .legend-sel{font-size:10px;background:#0b0e14;border:1px solid var(--border);padding:1px 5px;border-radius:6px}
+  .vp-findings{padding:12px;display:flex;flex-direction:column;gap:10px;max-height:420px;overflow:auto}
   .finding{background:#0f1422;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
   .finding.sev-error{border-left:3px solid var(--err)}
   .finding.sev-warning{border-left:3px solid var(--warn)}
   .finding.sev-info{border-left:3px solid var(--info)}
+  .finding.hidden{display:none}
   .finding-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .badge{font-size:10px;font-weight:700;letter-spacing:.06em;padding:3px 7px;border-radius:999px;border:1px solid transparent}
   .badge.err{background:#3a1320;color:var(--err);border-color:#5a1e2e}
@@ -117,6 +202,11 @@ export function generateHtmlReport(report: ScanReport): string {
   .badge.info{background:#132a44;color:var(--info);border-color:#1e3a5a}
   .ftype{font-weight:600;font-size:13px}
   .vpill{font-size:11px;color:var(--muted);border:1px solid var(--border);padding:2px 7px;border-radius:999px;background:#0b0e14}
+  .markers{display:inline-flex;gap:4px}
+  .marker-badge{font-size:11px;font-weight:800;padding:2px 6px;border-radius:999px;border:1px solid #fff;min-width:18px;text-align:center;line-height:16px}
+  .marker-badge.error{background:var(--err);color:#fff}
+  .marker-badge.warning{background:var(--warn);color:#111}
+  .marker-hint{font-size:11px;color:var(--muted);margin-top:4px}
   .msg{margin-top:6px;font-size:13px;color:#d0d6e6}
   details{margin-top:8px}
   details summary{font-size:12px;color:var(--muted);cursor:pointer}
@@ -134,26 +224,109 @@ export function generateHtmlReport(report: ScanReport): string {
   <div class="meta">Target: <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a> · <span class="mono">${esc(timestamp)}</span> · Viewports: ${report.viewports.map((v) => `${esc(v.label)} ${v.width}×${v.height}`).join(" · ")}</div>
   <div class="summary">
     <div class="stat"><div class="k">Total Findings</div><div class="v">${summary.total}</div></div>
-    <div class="stat"><div class="k">Errors</div><div class="v" style="color:var(--err)">${summary.errors}</div></div>
-    <div class="stat"><div class="k">Warnings</div><div class="v" style="color:var(--warn)">${summary.warnings}</div></div>
+    <div class="stat"><div class="k">Errors</div><div class="v" style="color:var(--err)">${summary.errors}</div><div class="sub">${affectedByErrors}/${totalViewports} viewports with errors</div></div>
+    <div class="stat"><div class="k">Warnings</div><div class="v" style="color:var(--warn)">${summary.warnings}</div><div class="sub">${affectedViewports}/${totalViewports} viewports affected</div></div>
     <div class="stat"><div class="k">Infos</div><div class="v" style="color:var(--info)">${summary.infos}</div></div>
   </div>
-  <div class="status ${statusClass}"><span class="dot"></span> ${esc(statusText)} — ${summary.errors} error${summary.errors===1?"":"s"}, ${summary.warnings} warning${summary.warnings===1?"":"s"}</div>
+  <div class="compact">
+    <span class="compact-pill err"><strong>${summary.errors}</strong> errors</span>
+    <span class="compact-pill warn"><strong>${summary.warnings}</strong> warnings</span>
+    <span class="compact-pill vp"><strong>${affectedViewports}/${totalViewports}</strong> viewports affected${affectedByErrors ? ` · ${affectedByErrors} with errors` : ""}</span>
+  </div>
+  <div class="status ${statusClass}"><span class="dot"></span> ${esc(statusText)} — ${summary.errors} error${summary.errors===1?"":"s"}, ${summary.warnings} warning${summary.warnings===1?"":"s"} · ${affectedViewports}/${totalViewports} viewports affected</div>
+  <div class="filters" id="filters">
+    <label>Viewport
+      <select id="filter-viewport">
+        <option value="all">All viewports</option>
+        ${viewports.map((v) => `<option value="${esc(v.label)}">${esc(v.label)} ${v.width}×${v.height}</option>`).join("")}
+      </select>
+    </label>
+    <label>Severity
+      <select id="filter-severity">
+        <option value="all">All severities</option>
+        <option value="error">error</option>
+        <option value="warning">warning</option>
+        <option value="info">info</option>
+      </select>
+    </label>
+    <label>Finding type
+      <select id="filter-type">
+        <option value="all">All types</option>
+        ${uniqueTypes.map((t) => `<option value="${esc(t)}">${esc(typeLabel(t))}</option>`).join("")}
+      </select>
+    </label>
+    <button id="filter-reset" type="button">Reset</button>
+    <span class="results-count" id="filter-count">${summary.total} findings</span>
+  </div>
 </header>
 <main>
   <h2>Screenshots &amp; Findings by Viewport</h2>
-  <div class="grid">
+  <div class="grid" id="vp-grid">
     ${vpCards}
   </div>
 
-  <h2>All Findings (flat)</h2>
-  <div class="all-findings">
+  <h2>All Findings (flat) — filtered</h2>
+  <div class="all-findings" id="flat-findings">
     ${allFindingsHtml}
   </div>
 </main>
 <footer>
-  Generated locally by FrameCritic v0.1 — no cloud, no AI. Artifacts: <span class="mono">screenshots/*.png</span>, <span class="mono">findings.json</span>, <span class="mono">report.html</span>
+  Generated locally by FrameCritic v0.1 — no cloud, no AI. Artifacts: <span class="mono">screenshots/*.png</span> + <span class="mono">*-annotated.png</span>, <span class="mono">findings.json</span>, <span class="mono">report.html</span> — markers link findings to annotated regions.
 </footer>
+<script>
+(function(){
+  const vpSel = document.getElementById('filter-viewport');
+  const sevSel = document.getElementById('filter-severity');
+  const typeSel = document.getElementById('filter-type');
+  const resetBtn = document.getElementById('filter-reset');
+  const countEl = document.getElementById('filter-count');
+
+  function applyFilters(){
+    const vp = vpSel.value;
+    const sev = sevSel.value;
+    const type = typeSel.value;
+    let visible = 0;
+    let total = 0;
+    document.querySelectorAll('.finding').forEach(el=>{
+      total++;
+      const mVp = vp === 'all' || el.dataset.viewport === vp;
+      const mSev = sev === 'all' || el.dataset.severity === sev;
+      const mType = type === 'all' || el.dataset.type === type;
+      const show = mVp && mSev && mType;
+      el.classList.toggle('hidden', !show);
+      if(show) visible++;
+    });
+    // also reflect on viewport cards optionally dim empty ones
+    document.querySelectorAll('.vp-card').forEach(card=>{
+      const vpLabel = card.dataset.viewport;
+      const vpMatch = vp === 'all' || vpLabel === vp;
+      // if viewport filter mismatches, hide card; otherwise keep but findings inside may be hidden
+      card.style.display = vpMatch ? '' : 'none';
+    });
+    countEl.textContent = visible + ' / ' + total + ' findings visible';
+  }
+  vpSel.addEventListener('change', applyFilters);
+  sevSel.addEventListener('change', applyFilters);
+  typeSel.addEventListener('change', applyFilters);
+  resetBtn.addEventListener('click', ()=>{ vpSel.value='all'; sevSel.value='all'; typeSel.value='all'; applyFilters(); });
+
+  // screenshot tab switching
+  document.querySelectorAll('.shot-tabs').forEach(tabs=>{
+    const btns = tabs.querySelectorAll('.tab');
+    const ann = tabs.querySelector('.shot-annotated');
+    const clean = tabs.querySelector('.shot-clean');
+    btns.forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const isAnn = btn.dataset.tab === 'annotated';
+        btns.forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        if(ann) ann.style.display = isAnn ? '' : 'none';
+        if(clean) clean.style.display = isAnn ? 'none' : '';
+      });
+    });
+  });
+})();
+</script>
 </body>
 </html>`;
 }

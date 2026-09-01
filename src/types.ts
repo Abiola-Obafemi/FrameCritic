@@ -20,11 +20,26 @@ export type Finding = {
   viewport: string;
   message: string;
   details?: Record<string, unknown>;
+  markerIds?: number[];
+};
+
+export type AnnotationBox = {
+  id: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  type: Finding["type"];
+  severity: Severity;
+  label: string;
+  selector?: string;
 };
 
 export type ViewportResult = {
   viewport: Viewport;
   screenshot: string; // relative path
+  annotatedScreenshot?: string; // relative path
+  annotations?: AnnotationBox[];
   findings: Finding[];
 };
 

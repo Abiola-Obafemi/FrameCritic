@@ -38,7 +38,7 @@ export function getDetectionScript(): string {
         if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
         const right = r.left + r.width;
         if (right > vw + 1 && r.width > 10) {
-          offenders.push({ selector: cssPath(el), tag: el.tagName.toLowerCase(), right: Math.round(right), width: Math.round(r.width), text: (el.textContent||'').trim().slice(0,80) });
+          offenders.push({ selector: cssPath(el), tag: el.tagName.toLowerCase(), right: Math.round(right), width: Math.round(r.width), text: (el.textContent||'').trim().slice(0,80), rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) } });
           if (offenders.length >= 12) break;
         }
       }
@@ -127,10 +127,13 @@ export function getDetectionScript(): string {
             const ratio = overlapArea / Math.min(areaA, areaB);
             // Only flag significant overlaps (>20% of smaller element) or large absolute overlap
             if (ratio > 0.20 || overlapArea > 2500) {
-              // Check stacking — if one is clearly behind and not visible, skip
+              const ox = Math.max(ar.left, br.left);
+              const oy = Math.max(ar.top, br.top);
               overlaps.push({
                 a: a.selector, b: b.selector,
-                overlap: { w: Math.round(xOverlap), h: Math.round(yOverlap), area: Math.round(overlapArea), ratio: Math.round(ratio*100)/100 }
+                rectA: { x: Math.round(ar.x), y: Math.round(ar.y), w: Math.round(ar.width), h: Math.round(ar.height) },
+                rectB: { x: Math.round(br.x), y: Math.round(br.y), w: Math.round(br.width), h: Math.round(br.height) },
+                overlap: { x: Math.round(ox), y: Math.round(oy), w: Math.round(xOverlap), h: Math.round(yOverlap), area: Math.round(overlapArea), ratio: Math.round(ratio*100)/100 }
               });
               if (overlaps.length >= 15) break;
             }
@@ -158,7 +161,8 @@ export function getDetectionScript(): string {
         if (isBroken && img.getAttribute('src')) {
           const cs = getComputedStyle(img);
           if (cs.display === 'none') continue;
-          broken.push({ selector: cssPath(img), src: img.getAttribute('src')||'', alt: img.getAttribute('alt')||'', w: img.naturalWidth, h: img.naturalHeight });
+          const r = img.getBoundingClientRect();
+          broken.push({ selector: cssPath(img), src: img.getAttribute('src')||'', alt: img.getAttribute('alt')||'', w: img.naturalWidth, h: img.naturalHeight, rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) } });
         }
       }
       if (broken.length) {
