@@ -189,78 +189,88 @@ jobs:
             run_model "$FALLBACK3" "45m" resume
           fi
 
-          if [ ! -f .cloud-agent-complete ]; then
-            echo "All configured free models exhausted/stopped."
-            exit 1
+          if [ -f .cloud-agent-complete ]; then
+            echo "TASK_COMPLETE=true" >> "$GITHUB_ENV"
+            echo "Cloud engineering task completed."
+          else
+            echo "TASK_COMPLETE=false" >> "$GITHUB_ENV"
+            echo "::warning::All configured free models exhausted or stopped before full completion. Preserving committed partial progress for review."
           fi
 
-          echo "Cloud engineering task completed."
+          exit 0
 
       - name: Remove local completion marker
-        if: success()
+        if: always()
         run: rm -f .cloud-agent-complete
 
-      - name: Require committed agent output
-        if: success()
+      - name: Preserve only committed agent output
         shell: bash
         run: |
           if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Cloud agent left uncommitted changes. Refusing to push partial output."
+            echo "::warning::Cloud agent left uncommitted changes. Discarding the uncommitted tail and preserving committed milestones only."
+            git status --short
+            git reset --hard HEAD
+            git clean -fd
+          fi
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Worktree is still dirty after cleanup."
             git status --short
             exit 1
           fi
 
           COMMITS_AHEAD=$(git rev-list --count "origin/main..HEAD")
           if [ "$COMMITS_AHEAD" -lt 1 ]; then
-            echo "::error::Cloud agent marked the task complete without creating a commit."
+            echo "::error::Cloud agent produced no committed engineering progress."
             exit 1
           fi
 
           echo "Agent produced $COMMITS_AHEAD committed change(s)."
 
       - name: Install project dependencies
-        if: success()
         run: npm ci
 
       - name: Build
-        if: success()
         run: npm run build
 
       - name: Install Playwright Chromium dependencies
-        if: success()
         run: npx playwright install --with-deps chromium
 
       - name: Test
-        if: success()
         run: npm test
 
       - name: Package smoke
-        if: success()
         run: |
           node scripts/package-smoke.js
           npm pack --dry-run
 
       - name: CLI smoke
-        if: success()
         run: node dist/cli.js --help
 
       - name: Final verification
-        if: success()
         run: |
+          echo "TASK_COMPLETE=$TASK_COMPLETE"
           git status
           git log --oneline -15
 
       - name: Push cloud branch
-        if: success()
         run: |
           git push -u origin "$BRANCH"
 
       - name: Open draft pull request
-        if: success()
+        shell: bash
         run: |
+          if [ "$TASK_COMPLETE" = "true" ]; then
+            PR_TITLE="Cloud agent: automated engineering task"
+            COMPLETION_NOTE="The requested cloud task reported complete."
+          else
+            PR_TITLE="[INCOMPLETE] Cloud agent: partial engineering task"
+            COMPLETION_NOTE="The configured model budget ended before the full task completed. Only committed milestones were preserved."
+          fi
+
           gh pr create \
             --draft \
             --base main \
             --head "$BRANCH" \
-            --title "Cloud agent: automated engineering task" \
-            --body "Automated OpenCode cloud engineering run. Review commits, tests, and generated outputs before merging. This PR is intentionally opened as a draft. Cloud Builder hard gates passed before push: committed worktree, npm ci, build, Playwright Chromium install, tests, package smoke, npm pack dry-run, and CLI help."
+            --title "$PR_TITLE" \
+            --body "Automated OpenCode cloud engineering run. $COMPLETION_NOTE Review commits, tests, and generated outputs before merging. This PR is intentionally opened as a draft. Cloud Builder hard gates passed before push: committed worktree, npm ci, build, Playwright Chromium install, tests, package smoke, npm pack dry-run, and CLI help."
