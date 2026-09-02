@@ -1,0 +1,183 @@
+name: Cloud Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Engineering task"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    env:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install OpenCode
+        run: npm install -g opencode-ai@latest
+
+      - name: Configure Git
+        run: |
+          git config user.name "FrameCritic Cloud Agent"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create cloud branch
+        run: |
+          BRANCH="cloud-agent-${GITHUB_RUN_ID}"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          git checkout -b "$BRANCH"
+
+      - name: Prevent completion marker from being committed
+        run: |
+          echo ".cloud-agent-complete" >> .git/info/exclude
+
+      - name: Run OpenCode with free-model failover
+        shell: bash
+        run: |
+          set +e
+
+          PRIMARY="opencode/muse-spark-1.2-contributor-free"
+          FALLBACK1="opencode/mimo-v2.5-free"
+          FALLBACK2="opencode/nemotron-3.5-lightning-free"
+          FALLBACK3="opencode/nemotron-3-ultra-free"
+
+          BASE_PROMPT=$(cat <<'PROMPT'
+          ${{ inputs.task }}
+
+          CLOUD AGENT RULES
+
+          Work autonomously on the CURRENT Git branch.
+
+          Inspect the repository before changing anything.
+
+          Do real useful engineering only.
+
+          For every meaningful milestone:
+          1. inspect
+          2. implement
+          3. test
+          4. inspect actual output where relevant
+          5. commit locally
+
+          You MAY create normal local commits.
+
+          DO NOT:
+          - push main
+          - force push
+          - switch to main
+          - create filler commits
+          - manipulate Hackatime or time tracking
+          - expose secrets
+          - publish packages
+          - create paid resources
+          - touch unrelated repositories
+          - weaken tests merely to pass
+
+          The GitHub workflow handles pushing and the PR.
+
+          When, and ONLY when, the entire requested task is genuinely
+          finished and verified, create this local marker file:
+
+          .cloud-agent-complete
+
+          Then stop.
+
+          If unfinished, do not create that file.
+          PROMPT
+          )
+
+          run_model () {
+            MODEL="$1"
+            LIMIT="$2"
+
+            echo "========================================"
+            echo "Trying model: $MODEL"
+            echo "========================================"
+
+            if [ -f .cloud-agent-complete ]; then
+              return 0
+            fi
+
+            if [ "$3" = "first" ]; then
+              timeout "$LIMIT" \
+                opencode run --auto \
+                -m "$MODEL" \
+                "$BASE_PROMPT"
+            else
+              timeout "$LIMIT" \
+                opencode run --auto \
+                --continue \
+                -m "$MODEL" \
+                "Resume the unfinished cloud task. Inspect current git state and previous work first. Continue the original task. Do not redo completed work. Create .cloud-agent-complete only when the entire task is genuinely finished and verified."
+            fi
+
+            return $?
+          }
+
+          # Muse gets the longest first attempt.
+          run_model "$PRIMARY" "100m" first
+
+          if [ ! -f .cloud-agent-complete ]; then
+            echo "Muse did not complete task. Falling back to MiMo."
+            run_model "$FALLBACK1" "75m" resume
+          fi
+
+          if [ ! -f .cloud-agent-complete ]; then
+            echo "MiMo did not complete task. Falling back to Nemotron Lightning."
+            run_model "$FALLBACK2" "60m" resume
+          fi
+
+          if [ ! -f .cloud-agent-complete ]; then
+            echo "Lightning did not complete task. Falling back to Nemotron Ultra."
+            run_model "$FALLBACK3" "45m" resume
+          fi
+
+          if [ ! -f .cloud-agent-complete ]; then
+            echo "All configured free models exhausted/stopped."
+            exit 1
+          fi
+
+          echo "Cloud engineering task completed."
+
+      - name: Remove local completion marker
+        if: success()
+        run: rm -f .cloud-agent-complete
+
+      - name: Final verification
+        if: success()
+        run: |
+          git status
+          git log --oneline -15
+
+      - name: Push cloud branch
+        if: success()
+        run: |
+          git push -u origin "$BRANCH"
+
+      - name: Open pull request
+        if: success()
+        run: |
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Cloud agent: automated engineering task" \
+            --body "Automated OpenCode cloud engineering run. Review commits, tests, and generated outputs before merging."
