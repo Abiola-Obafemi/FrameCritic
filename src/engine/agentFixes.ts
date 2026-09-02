@@ -125,6 +125,7 @@ function buildFixPacket(report: ScanReport): string {
       lines.push(``);
       lines.push(`- **Severity:** ${f.severity}`);
       lines.push(`- **Viewport:** ${vpLabel} (${vr.viewport.width}×${vr.viewport.height})`);
+      if ((f as any).scenario) lines.push(`- **Scenario:** \`${(f as any).scenario}\``);
       lines.push(`- **Selector:** \`${primarySelector}\``);
       if (selectors.length > 1) {
         lines.push(`- **Related selectors:** ${selectors.slice(1, 4).map((s) => "`" + s + "`").join(", ")}${selectors.length > 4 ? ` +${selectors.length - 4} more` : ""}`);

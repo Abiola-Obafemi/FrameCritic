@@ -84,7 +84,27 @@ export type A11yInfo = {
   enabled: boolean;
 };
 
+export const ARTIFACT_VERSION = "0.2";
+
+export type Manifest = {
+  artifactVersion: string;
+  generatedAt: string;
+  kind: "single" | "batch";
+  artifacts: {
+    findings: string;
+    report: string;
+    agentFixes: string;
+    manifest: string;
+    screenshots: string[];
+    traces?: string[];
+    batch?: string;
+    index?: string;
+    routes?: string[];
+  };
+};
+
 export type ScanReport = {
+  artifactVersion?: string;
   url: string;
   timestamp: string;
   viewports: Viewport[];
@@ -96,4 +116,5 @@ export type ScanReport = {
   scenario?: ScenarioInfo | null;
   trace?: TraceInfo | null;
   a11y?: A11yInfo | null;
+  manifest?: Manifest;
 };

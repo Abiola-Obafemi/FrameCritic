@@ -1,7 +1,7 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox, type PolicyOptions } from "../types.js";
+import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox, type PolicyOptions, ARTIFACT_VERSION, type Manifest } from "../types.js";
 import { collectPageFindings } from "./detect.js";
 import { generateHtmlReport } from "./report.js";
 import { generateAgentFixesMarkdown } from "./agentFixes.js";
@@ -464,7 +464,27 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     policyDecision = evaluatePolicy(summary, { failOn: "error" });
   }
 
+  const screenshots = results.flatMap((r) => {
+    const arr = [r.screenshot];
+    if (r.annotatedScreenshot) arr.push(r.annotatedScreenshot);
+    return arr;
+  });
+  const manifest: Manifest = {
+    artifactVersion: ARTIFACT_VERSION,
+    generatedAt: timestamp,
+    kind: "single",
+    artifacts: {
+      findings: "findings.json",
+      report: "report.html",
+      agentFixes: "AGENT_FIXES.md",
+      manifest: "manifest.json",
+      screenshots,
+      traces: traceFiles.length ? [...traceFiles] : undefined,
+    },
+  };
+
   const report: ScanReport = {
+    artifactVersion: ARTIFACT_VERSION,
     url,
     timestamp,
     viewports,
@@ -476,6 +496,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     scenario: scenario ? { name: scenario.name, steps: scenario.steps, file: opts.scenarioPath ?? null } as any : null,
     trace: opts.trace ? { enabled: true, files: traceFiles } : null,
     a11y: opts.a11y ? { enabled: true } : null,
+    manifest,
   };
 
   await writeFile(path.join(outDir, "findings.json"), JSON.stringify(report, null, 2), "utf-8");
@@ -483,6 +504,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
   await writeFile(path.join(outDir, "report.html"), html, "utf-8");
   const fixesMd = generateAgentFixesMarkdown(report);
   await writeFile(path.join(outDir, "AGENT_FIXES.md"), fixesMd, "utf-8");
+  await writeFile(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8");
 
   return report;
 }

@@ -61,6 +61,10 @@ npx framecritic scan http://localhost:3001 --config ./my-config.json
 
 # Scenario (declarative, no code execution)
 npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-menu/scenario.json
+# Extended actions: scroll, select, hotkey (modifiers+key) — all validated, no eval
+npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-select/scenario.json
+npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-scroll/scenario.json
+npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-hotkey/scenario.json
 
 # Structural compare (not pixel diff)
 npx framecritic compare ./baseline/findings.json ./current/findings.json --fail-on-new
@@ -68,6 +72,19 @@ npx framecritic compare ./baseline/findings.json ./current/findings.json --fail-
 # Optional trace (off by default)
 npx framecritic scan http://localhost:3001 --trace
 # traces: framecritic-out/scan-*/traces/*.zip  (view with npx playwright show-trace)
+
+# Accessibility diagnostics (opt-in, against TARGET page, NOT WCAG certification)
+npx framecritic scan http://localhost:3001 --a11y
+# -> findings of type accessibility with rule/impact/nodes/selectors/rects
+
+# Bounded responsive sweep (fixed height 900, max 12 widths)
+npx framecritic scan http://localhost:3001 --sweep 320:1200:160
+# -> generates sweep-320, sweep-480, ... deterministic labels
+
+# Multi-route batch (max 20, declarative JSON, isolated routes/<name>/)
+# routes.json -> { "routes": [{ "name": "home", "path": "/" }, { "name": "broken", "path": "/broken" }] }
+npx framecritic scan http://localhost:3001 --routes ./fixtures/multi-route/routes.json
+# -> batch.json + index.html linking each route report
 
 # Dashboard
 npm start

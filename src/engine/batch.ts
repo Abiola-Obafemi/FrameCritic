@@ -3,6 +3,7 @@ import path from "node:path";
 import { scanUrl } from "./scanner.js";
 import { loadRoutesManifest, resolveRouteUrl, sanitizeRouteName } from "../routes.js";
 import { redactUrl } from "../security.js";
+import { ARTIFACT_VERSION, type Manifest } from "../types.js";
 import type { Viewport } from "../types.js";
 import type { PolicyOptions } from "../types.js";
 
@@ -29,6 +30,7 @@ export type BatchSummary = {
 };
 
 export type BatchReport = {
+  artifactVersion?: string;
   baseUrl: string;
   timestamp: string;
   routes: BatchRouteResult[];
@@ -37,6 +39,7 @@ export type BatchReport = {
   policy?: any;
   trace?: any;
   a11y?: any;
+  manifest?: Manifest;
 };
 
 function esc(s: string): string {
@@ -200,11 +203,29 @@ export async function scanBatch(opts: {
     }
   }
 
+  const manifest: Manifest = {
+    artifactVersion: ARTIFACT_VERSION,
+    generatedAt: timestamp,
+    kind: "batch",
+    artifacts: {
+      findings: "batch.json",
+      report: "index.html",
+      agentFixes: "batch.json", // batch summary serves as agent entry; per-route fixes in routes/<name>/AGENT_FIXES.md
+      manifest: "manifest.json",
+      screenshots: results.filter((r) => r.status === "ok").flatMap((r) => [`${r.outDir}/screenshots`]),
+      batch: "batch.json",
+      index: "index.html",
+      routes: results.map((r) => r.outDir),
+    },
+  };
+
   const batchReport: BatchReport = {
+    artifactVersion: ARTIFACT_VERSION,
     baseUrl: baseUrlRedacted,
     timestamp,
     routes: results,
     summary: { total: aggTotal, errors: aggErrors, warnings: aggWarnings, infos: aggInfos },
+    manifest,
   };
 
   // Write batch.json
@@ -212,6 +233,8 @@ export async function scanBatch(opts: {
   // Write index.html
   const html = generateBatchHtml(batchReport, opts.outDir);
   await fs.promises.writeFile(path.join(opts.outDir, "index.html"), html, "utf-8");
+  // Write manifest.json
+  await fs.promises.writeFile(path.join(opts.outDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8");
 
   return batchReport;
 }
