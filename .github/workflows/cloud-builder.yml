@@ -7,6 +7,11 @@ on:
         description: "Engineering task"
         required: true
         type: string
+  push:
+    branches:
+      - "cloud-queue/**"
+    paths:
+      - ".github/cloud-task.md"
 
 permissions:
   contents: write
@@ -26,10 +31,39 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
-      - name: Checkout
+      - name: Checkout trigger ref
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Load engineering task
+        shell: bash
+        env:
+          DISPATCH_TASK: ${{ inputs.task }}
+        run: |
+          TASK_FILE="$RUNNER_TEMP/framecritic-cloud-task.txt"
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            printf '%s\n' "$DISPATCH_TASK" > "$TASK_FILE"
+          else
+            if [ ! -s .github/cloud-task.md ]; then
+              echo "::error::cloud-queue trigger requires a non-empty .github/cloud-task.md"
+              exit 1
+            fi
+            cp .github/cloud-task.md "$TASK_FILE"
+          fi
+
+          if [ ! -s "$TASK_FILE" ]; then
+            echo "::error::Cloud Builder received an empty engineering task."
+            exit 1
+          fi
+
+          echo "TASK_FILE=$TASK_FILE" >> "$GITHUB_ENV"
+
+      - name: Reset workspace to main
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -64,9 +98,7 @@ jobs:
           FALLBACK2="opencode/nemotron-3.5-lightning-free"
           FALLBACK3="opencode/nemotron-3-ultra-free"
 
-          BASE_PROMPT=$(cat <<'PROMPT'
-          ${{ inputs.task }}
-
+          CLOUD_RULES=$(cat <<'RULES'
           CLOUD AGENT RULES
 
           Work autonomously on the CURRENT Git branch.
@@ -106,8 +138,10 @@ jobs:
           Then stop.
 
           If unfinished, do not create that file.
-          PROMPT
+          RULES
           )
+
+          BASE_PROMPT="$(cat "$TASK_FILE")"$'\n\n'"$CLOUD_RULES"
 
           run_model () {
             MODEL="$1"
@@ -176,7 +210,7 @@ jobs:
             exit 1
           fi
 
-          COMMITS_AHEAD=$(git rev-list --count "${GITHUB_SHA}..HEAD")
+          COMMITS_AHEAD=$(git rev-list --count "origin/main..HEAD")
           if [ "$COMMITS_AHEAD" -lt 1 ]; then
             echo "::error::Cloud agent marked the task complete without creating a commit."
             exit 1
