@@ -43,4 +43,5 @@ console.log("  4. install tarball in temp dir outside repo and run: node node_mo
 console.log("[smoke] PASS (static checks)");
 
 // Create a marker file for CI to know smoke was checked
+fs.mkdirSync(path.join(root, "framecritic-out"), { recursive: true });
 fs.writeFileSync(path.join(root, "framecritic-out", "smoke-check.txt"), "smoke ok " + new Date().toISOString(), "utf-8");
