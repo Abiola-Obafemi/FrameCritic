@@ -15,6 +15,8 @@ function findingSelectors(f: Finding): string[] {
       return d.location?.url ? [d.location.url] : [];
     case "page-error":
       return d.url ? [String(d.url)] : d.selector ? [String(d.selector)] : [];
+    case "accessibility":
+      return (d.nodes ?? []).map((n: any) => n.selector).filter(Boolean).length ? (d.nodes ?? []).map((n: any) => n.selector).filter(Boolean) : (d.affectedSelectors ?? []).filter(Boolean);
     default:
       return [];
   }
@@ -51,6 +53,13 @@ function suggestionFor(f: Finding): string {
       if (d.status) return `Network request failed with ${d.status} for ${d.url}. Verify endpoint, routing, and error handling; check that missing resource does not break rendering.`;
       if (d.stack) return `Uncaught page error: ${f.message}. Review stack trace and reproduce locally; guard against unhandled exceptions.`;
       return `Page/network error: ${f.message}. Investigate failed request or script error; confirm graceful fallback.`;
+    }
+    case "accessibility": {
+      const rule = d.rule ?? "accessibility";
+      const nodes = (d.nodes ?? []).slice(0, 2).map((n: any) => `${n.selector || n.target?.join?.(" ") || "(no selector)"}: ${n.failureSummary?.slice(0,120) ?? n.html?.slice(0,80) ?? ""}`).join("; ");
+      const help = d.help ? ` Help: ${d.help}` : "";
+      const url = d.helpUrl ? ` See ${d.helpUrl}.` : "";
+      return `Automated accessibility violation [${rule}]: ${nodes || "see nodes"}. ${help}${url} This is an automated diagnostic, NOT WCAG certification — manually verify with assistive technology and axe documentation before claiming compliance. Add alt text, labels, or ARIA as indicated; confirm selectors in source.`;
     }
     default:
       return "Review the finding details and verify expected behavior in the affected viewport.";

@@ -15,7 +15,8 @@ export type Finding = {
     | "overlapping-elements"
     | "broken-image"
     | "console-error"
-    | "page-error";
+    | "page-error"
+    | "accessibility";
   severity: Severity;
   viewport: string;
   message: string;
@@ -79,6 +80,10 @@ export type TraceInfo = {
   files: string[]; // relative paths
 };
 
+export type A11yInfo = {
+  enabled: boolean;
+};
+
 export type ScanReport = {
   url: string;
   timestamp: string;
@@ -90,4 +95,5 @@ export type ScanReport = {
   policy?: PolicyDecision;
   scenario?: ScenarioInfo | null;
   trace?: TraceInfo | null;
+  a11y?: A11yInfo | null;
 };

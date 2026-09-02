@@ -42,6 +42,7 @@ export type ParsedArgs = {
   jsonSummary?: boolean;
   scenario?: string;
   trace?: boolean;
+  a11y?: boolean;
   // compare specific
   compareBaseline?: string;
   compareCurrent?: string;
@@ -68,6 +69,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let jsonSummary = false;
   let scenario: string | undefined;
   let trace = false;
+  let a11y = false;
   let failOnNew = false;
   const positional: string[] = [];
 
@@ -160,6 +162,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
       trace = true;
       continue;
     }
+    if (a === "--a11y") {
+      a11y = true;
+      continue;
+    }
     if (a === "--scenario") {
       const raw = argv[i + 1];
       if (!raw || raw.startsWith("-")) throw new Error(`--scenario requires a file path`);
@@ -204,6 +210,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       jsonSummary,
       scenario,
       trace,
+      a11y,
       compareBaseline: positional[0],
       compareCurrent: positional[1],
       failOnNew,
@@ -213,5 +220,5 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (positional.length > 0) url = positional[0];
   if (positional.length > 1 && !output) output = positional[1];
 
-  return { command, url, output, open, viewports, help: false, config, failOn, maxWarnings, jsonSummary, scenario, trace, failOnNew };
+  return { command, url, output, open, viewports, help: false, config, failOn, maxWarnings, jsonSummary, scenario, trace, a11y, failOnNew };
 }

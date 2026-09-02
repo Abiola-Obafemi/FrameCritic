@@ -117,15 +117,16 @@ Report highlights:
 - **Compare:** `framecritic compare <baseline> <current>` classifies NEW/RESOLVED/PERSISTING via stable fingerprints (type+viewport+normalized selectors), produces `comparison.json` + `comparison.html`, optional `--fail-on-new`
 - **Scenario:** `--scenario <file>` declarative JSON (click/fill/hover/press/wait, validated, no eval), runs per viewport, failure becomes explicit `page-error`, findings tagged with scenario name
 - **Trace:** `--trace` captures Playwright trace per viewport to `traces/*.zip` (off by default), reported in terminal/JSON/HTML (`npx playwright show-trace`)
+- **Accessibility (opt-in):** `--a11y` runs axe-core against the TARGET page (not the report) and emits structured `accessibility` findings with rule, impact, nodes, selectors and rects where measurable, integrated into `findings.json`/`report.html`/`AGENT_FIXES.md`; labeled as automated diagnostics, NOT WCAG certification
 - **GitHub Actions:** `.github/workflows/ci.yml` for FrameCritic itself and `docs/github-actions-example.yml` for consumers
 - **Packaging:** `npm pack` verified — contains `dist/`, `public/`, `README`, `LICENSE` (no `src/`, tests, fixtures, secrets, `framecritic-out`)
 
 ## Architecture overview
 
-```
+``` 
 framecritic/
 ├── src/
-│   ├── cli.ts            — CLI (scan/compare, --output/--viewport/--config/--fail-on/--max-warnings/--json-summary/--scenario/--trace)
+│   ├── cli.ts            — CLI (scan/compare, --output/--viewport/--config/--fail-on/--max-warnings/--json-summary/--scenario/--trace/--a11y)
 │   ├── cli-args.ts       — argument parser (exported for tests)
 │   ├── config.ts         — .framecritic.json loading + validation + ignore matching
 │   ├── policy.ts         — CI gate evaluation (exit codes 0/1/2)
@@ -135,9 +136,10 @@ framecritic/
 │   ├── server.ts         — Express dashboard (POST /api/scan, GET /reports)
 │   ├── types.ts          — Viewport, Finding, AnnotationBox, ScanReport, Policy, Scenario
 │   └── engine/
-│       ├── scanner.ts    — Playwright capture @ deviceScaleFactor 1, scenario/trace, annotation, artifact writer
+│       ├── scanner.ts    — Playwright capture @ deviceScaleFactor 1, scenario/trace/a11y, annotation, artifact writer
 │       ├── detect.ts     — in-page script (scrollWidth, getBoundingClientRect, overlap, broken images)
-│       ├── report.ts     — accessible HTML report with filters/tabs/summary/scenario/trace/policy
+│       ├── a11y.ts       — axe-core injection + target-page diagnostics (opt-in --a11y)
+│       ├── report.ts     — accessible HTML report with filters/tabs/summary/scenario/trace/policy/a11y
 │       └── agentFixes.ts — AGENT_FIXES.md generation per finding
 ├── public/index.html     — local dashboard (no build step)
 ├── demo-app/             — intentionally broken fixture (not shipped)
@@ -165,6 +167,7 @@ framecritic/
 | **broken-image** | error | `images[]` with `src`, `alt`, `selector`, `rect` | ✓ per broken image | `!complete || naturalWidth===0` with `src`; includes collapsed `rect` fallback |
 | **console-error** | error | `text`, `location {url,line,col}` | ✗ | All `console.type==="error"` |
 | **page-error** | error / warning (status `>=500` → error else warning) | `status`, `url` or `stack`/`message` | ✗ | Failed `response.status >=400` (except `favicon.ico` 404), `pageerror` events, `page.goto` timeout |
+| **accessibility** (opt-in `--a11y`) | error if `critical`/`serious`, warning otherwise | `rule`, `impact`, `help`, `helpUrl`, `tags`, `nodes[]` with `selector`, `html`, `failureSummary`, `rect`, `affectedSelectors`, `disclaimer` | ✓ per node where meaningful `rect` | axe-core violations run against TARGET page; NOT WCAG certification; capped 12 nodes/violation; selector/rect used for annotation |
 
 Each detector runs independently per viewport; the same page can be clean on desktop and overflow on mobile. The demo triggers all six.
 
@@ -175,7 +178,7 @@ Each detector runs independently per viewport; the same page can be clean on des
 - **Chromium only:** Playwright `chromium` required.
 - **Scenario coverage:** Small safe set (click/fill/hover/press/wait, max 20 steps, wait ≤5000ms); no `eval`.
 - **Trace:** Optional `--trace` only; large traces may affect disk/time.
-- **Accessibility is for the report, not the target:** Report is semantic/keyboard/focus/contrast compliant; target a11y not diagnosed.
+- **Accessibility (target):** Optional `--a11y` runs an automated axe-core scan against the TARGET page (not the report). Findings are deterministic diagnostics, NOT WCAG compliance certification; manual review is required. Report itself remains semantic/keyboard/focus/contrast compliant.
 - **No pixel diff:** Structural findings only; `compare` is fingerprint-based, not visual diff.
 - **Security:** Best-effort redaction (credentials, query tokens) and safe paths; not a full audit. See `src/security.ts`.
 - **Local artifacts:** `framecritic-out/` is local and untracked.
@@ -185,7 +188,8 @@ Each detector runs independently per viewport; the same page can be clean on des
 Planned, not promised:
 
 - [ ] More detectors: missing `alt`, empty interactive labels, large layout shift candidates, truncated text, z-order traps
-- [ ] HTML validation and axe pass for the *target* page
+- [x] axe-core pass for the *target* page (`--a11y` opt-in, automated diagnostics, NOT WCAG certification) — shipped in v0.2 milestone 1. HTML validation still planned
+- [ ] HTML validation for the *target* page
 - [ ] Expanded scenario actions (scroll, select, keyboard combos)
 
 Out of scope: accounts, billing, cloud storage, AI inference, proxying, multi-tenant hosting.

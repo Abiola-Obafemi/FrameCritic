@@ -21,6 +21,7 @@ const KNOWN_TYPES: Finding["type"][] = [
   "broken-image",
   "console-error",
   "page-error",
+  "accessibility",
 ];
 
 const VIEWPORT_KEYS = ["mobile", "tablet", "desktop"] as const;
@@ -167,6 +168,8 @@ function getFindingSelectors(f: Finding): string[] {
       return (d.pairs ?? []).flatMap((p: any) => [p.a, p.b]).filter((s: any) => typeof s === "string");
     case "broken-image":
       return (d.images ?? []).map((i: any) => i.selector).filter((s: any) => typeof s === "string");
+    case "accessibility":
+      return ((d.nodes ?? []).map((n: any) => n.selector).filter((s: any) => typeof s === "string").length ? (d.nodes ?? []).map((n: any) => n.selector).filter((s: any) => typeof s === "string") : (d.affectedSelectors ?? []).filter((s: any) => typeof s === "string"));
     default:
       return [];
   }

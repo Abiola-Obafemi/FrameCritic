@@ -18,6 +18,7 @@ function typeLabel(t: Finding["type"]): string {
     "broken-image": "Broken Image",
     "console-error": "Console Error",
     "page-error": "Page / Network Error",
+    "accessibility": "Accessibility (automated)",
   };
   return map[t] ?? t;
 }
@@ -29,6 +30,9 @@ function renderFinding(f: Finding, idx: number): string {
     .join(" ");
   const hasMarkers = (f.markerIds?.length ?? 0) > 0;
   const scenarioBadge = (f as any).scenario ? `<span class="vpill" style="border-color:var(--focus);color:var(--focus)">scenario: ${esc((f as any).scenario)}</span>` : ``;
+  const isA11y = f.type === "accessibility";
+  const a11yNote = isA11y ? `<div class="a11y-note" role="note">Automated accessibility finding — not WCAG compliance certification. Manual review required.</div>` : ``;
+  const helpLink = isA11y && (f.details as any)?.helpUrl ? `<div class="a11y-help"><a href="${esc(String((f.details as any).helpUrl))}" target="_blank" rel="noopener">Learn more: ${esc(String((f.details as any).rule ?? f.type))}</a></div>` : ``;
   return `
   <article class="finding sev-${esc(f.severity)}" data-viewport="${esc(f.viewport)}" data-severity="${esc(f.severity)}" data-type="${esc(f.type)}" id="finding-${idx}" aria-labelledby="finding-title-${idx}">
     <div class="finding-head">
@@ -39,6 +43,8 @@ function renderFinding(f: Finding, idx: number): string {
       ${hasMarkers ? `<span class="markers" aria-label="Markers ${esc(f.markerIds!.join(", "))}">${markerBadges}</span>` : ``}
     </div>
     <div class="msg">${esc(f.message)}</div>
+    ${a11yNote}
+    ${helpLink}
     ${hasMarkers ? `<div class="marker-hint">Markers ${esc(f.markerIds!.join(", "))} on annotated screenshot</div>` : ``}
     ${detailsJson ? `<details><summary>Details</summary><pre>${esc(detailsJson)}</pre></details>` : ``}
   </article>`;
@@ -233,6 +239,10 @@ export function generateHtmlReport(report: ScanReport): string {
   pre{margin:8px 0 0;background:#080a12;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;overflow:auto;max-height:220px;color:#cbd5e1}
   .no-issues{color:var(--muted);font-size:13px}
   .all-findings{display:flex;flex-direction:column;gap:10px}
+  .a11y-note{margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(124,92,255,0.12);border:1px solid #2a2a4a;color:#b8b8ff;font-size:11px}
+  .a11y-help{margin-top:4px;font-size:11px}
+  .a11y-help a{color:var(--info);text-decoration:none}
+  .a11y-help a:hover{text-decoration:underline}
   footer{max-width:1200px;margin:0 auto;padding:10px 20px 30px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:10px}
   .mono{font-family: ui-monospace, SFMono-Regular, Menlo, monospace}
 </style>
@@ -251,6 +261,7 @@ export function generateHtmlReport(report: ScanReport): string {
   </div>
   ${report.scenario ? `<div role="note" aria-label="Scenario" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid #2a2a4a;background:#151530;color:#b8b8ff;font-size:12px"><strong>Scenario:</strong> <span class="mono">${esc(report.scenario.name)}</span> — ${report.scenario.steps.length} step(s)${report.scenario.file ? ` — <span class="mono">${esc(report.scenario.file)}</span>` : ""}<br><span class="mono">${esc(report.scenario.steps.map(s => s.action + (s.selector ? ` ${s.selector}` : s.ms ? ` wait ${s.ms}ms` : s.key ? ` press ${s.key}` : "")).join(" → "))}</span></div>` : ``}
   ${report.trace?.enabled ? `<div role="note" aria-label="Trace artifacts" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid #2a4a1e;background:#1a2a0f;color:#b8d4b8;font-size:12px"><strong>Trace:</strong> ${report.trace.files.length} file(s) — ${esc(report.trace.files.join(", "))} — view with <span class="mono">npx playwright show-trace ${esc(report.trace.files[0] ?? "")}</span></div>` : ``}
+  ${report.a11y?.enabled ? `<div role="note" aria-label="Accessibility scan" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid #2a2a4a;background:#151530;color:#b8b8ff;font-size:12px"><strong>Accessibility:</strong> Automated scan enabled (axe-core) — findings labeled <span class="mono">accessibility</span> are automated diagnostics, NOT WCAG compliance certification. Manual review required.</div>` : ``}
   ${report.policy ? `<div role="note" aria-label="Policy decision" style="margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid ${report.policy.failed ? "#4a1e2e" : "#1a4a2e"};background:${report.policy.failed ? "#2a1320" : "#0f2a1a"};color:${report.policy.failed ? "var(--err)" : "var(--ok)"};font-size:12px;font-weight:600">Policy: fail-on=${esc(report.policy.failOn)}${report.policy.maxWarnings !== undefined ? `, max-warnings=${report.policy.maxWarnings}` : ""} → ${report.policy.failed ? "FAIL" : "PASS"} — ${esc(report.policy.reason)} (exit ${report.policy.exitCode})</div>` : ``}
   <div class="compact">
     <span class="compact-pill err"><strong>${summary.errors}</strong> errors</span>

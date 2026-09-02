@@ -37,6 +37,7 @@ Options (scan):
   --json-summary             Emit machine-readable JSON summary to stdout and file
   --scenario <file>          Declarative scenario JSON (click/fill/hover/press/wait)
   --trace                    Capture Playwright trace (stored in traces/*.zip)
+  --a11y                     Run automated accessibility scan on target page (axe-core, opt-in)
   --open                     Open report.html in default browser after scan
 
 Options (compare):
@@ -58,7 +59,7 @@ Examples:
   framecritic compare ./baseline/findings.json ./current/findings.json --fail-on-new
 
 Detectors:
-  horizontal-overflow · outside-viewport · overlapping-elements · broken-image · console/page errors
+  horizontal-overflow · outside-viewport · overlapping-elements · broken-image · console/page errors · accessibility (with --a11y)
 
 Config (.framecritic.json):
   { "ignore": { "selectors": [], "types": [], "viewports": { "mobile": [], "tablet": [], "desktop": [] } } }
@@ -126,6 +127,9 @@ function printSummary(report: Awaited<ReturnType<typeof scanUrl>>, outDir: strin
   }
   if (report.trace?.enabled) {
     console.log(formatSummaryLine("Trace:", `${report.trace.files.length} file(s) → ${path.join(outDir, "traces")}`, "dim"));
+  }
+  if (report.a11y?.enabled) {
+    console.log(formatSummaryLine("Accessibility:", "enabled (axe-core, automated)", "dim"));
   }
   if (report.policy) {
     const pol = report.policy.failOn + (report.policy.maxWarnings !== undefined ? `, max-warnings=${report.policy.maxWarnings}` : "");
@@ -262,6 +266,9 @@ if (isMain) {
   if (parsed.trace) {
     console.log(`[FrameCritic] Trace: enabled`);
   }
+  if (parsed.a11y) {
+    console.log(`[FrameCritic] Accessibility: enabled (axe-core)`);
+  }
   console.log(`[FrameCritic] Output → ${outDir}`);
 
   const policyOpts = {
@@ -271,7 +278,7 @@ if (isMain) {
 
   let report: Awaited<ReturnType<typeof scanUrl>>;
   try {
-    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config, policy: policyOpts, scenarioPath: parsed.scenario, trace: parsed.trace });
+    report = await scanUrl({ url, outDir, viewports: parsed.viewports as any, configPath: parsed.config, policy: policyOpts, scenarioPath: parsed.scenario, trace: parsed.trace, a11y: parsed.a11y });
   } catch (e: any) {
     console.error(`\n[FrameCritic] Scan failed: ${e?.message ?? String(e)}`);
     process.exit(1);
