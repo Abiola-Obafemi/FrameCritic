@@ -119,6 +119,7 @@ Report highlights:
 - **Trace:** `--trace` captures Playwright trace per viewport to `traces/*.zip` (off by default), reported in terminal/JSON/HTML (`npx playwright show-trace`)
 - **Accessibility (opt-in):** `--a11y` runs axe-core against the TARGET page (not the report) and emits structured `accessibility` findings with rule, impact, nodes, selectors and rects where measurable, integrated into `findings.json`/`report.html`/`AGENT_FIXES.md`; labeled as automated diagnostics, NOT WCAG certification
 - **Sweep (opt-in):** `--sweep <min>:<max>:<step>` generates bounded sweep viewports (fixed height 900, max 12 widths, labels `sweep-<width>`), reuses detector pipeline, outputs navigable report with per-width findings
+- **Multi-route (opt-in):** `framecritic scan <base-url> --routes <routes.json>` bounded batch (max 20 routes, declarative `{routes:[{name,path,scenario?}]}`), resolves relative paths against base safely, isolates per-route artifacts in `routes/<name>/`, produces `batch.json` + `index.html` linking each `report.html`, aggregates counts while preserving route identity, continues on per-route failure
 - **GitHub Actions:** `.github/workflows/ci.yml` for FrameCritic itself and `docs/github-actions-example.yml` for consumers
 - **Packaging:** `npm pack` verified — contains `dist/`, `public/`, `README`, `LICENSE` (no `src/`, tests, fixtures, secrets, `framecritic-out`)
 
@@ -127,7 +128,7 @@ Report highlights:
 ``` 
 framecritic/
 ├── src/
-│   ├── cli.ts            — CLI (scan/compare, --output/--viewport/--config/--fail-on/--max-warnings/--json-summary/--scenario/--trace/--a11y)
+│   ├── cli.ts            — CLI (scan/compare, --output/--viewport/--sweep/--routes/--config/--fail-on/--max-warnings/--json-summary/--scenario/--trace/--a11y)
 │   ├── cli-args.ts       — argument parser (exported for tests)
 │   ├── config.ts         — .framecritic.json loading + validation + ignore matching
 │   ├── policy.ts         — CI gate evaluation (exit codes 0/1/2)
@@ -138,13 +139,14 @@ framecritic/
 │   ├── types.ts          — Viewport, Finding, AnnotationBox, ScanReport, Policy, Scenario
 │   └── engine/
 │       ├── scanner.ts    — Playwright capture @ deviceScaleFactor 1, scenario/trace/a11y, annotation, artifact writer
+│       ├── batch.ts      — multi-route orchestration (bounded manifest, per-route isolated dirs, batch.json + index.html)
 │       ├── detect.ts     — in-page script (scrollWidth, getBoundingClientRect, overlap, broken images)
 │       ├── a11y.ts       — axe-core injection + target-page diagnostics (opt-in --a11y)
 │       ├── report.ts     — accessible HTML report with filters/tabs/summary/scenario/trace/policy/a11y
 │       └── agentFixes.ts — AGENT_FIXES.md generation per finding
 ├── public/index.html     — local dashboard (no build step)
 ├── demo-app/             — intentionally broken fixture (not shipped)
-├── fixtures/             — scenario-menu/modal/hover + saas-dashboard + landing-page (not shipped)
+├── fixtures/             — multi-route, a11y-basic, sweep-breakpoint, scenario-* (not shipped)
 ├── docs/assets/          — real generated demo annotated PNG (committed)
 └── framecritic-out/      — per-scan artifacts (ignored in git/npm)
 ```
@@ -192,6 +194,7 @@ Planned, not promised:
 - [x] axe-core pass for the *target* page (`--a11y` opt-in, automated diagnostics, NOT WCAG certification) — shipped in v0.2 milestone 1
 - [x] Bounded responsive width sweep (`--sweep <min>:<max>:<step>`, fixed height 900, max 12 widths) — shipped in v0.2 milestone 2
 - [x] Expanded scenario actions (scroll with bounded coordinates/selector, select for &lt;select&gt;, hotkey with strict modifiers+key validation) — shipped in v0.2 milestone 3
+- [x] Multi-route batch scan (`--routes <routes.json>`, max 20, declarative, per-route isolated artifacts, batch.json + index.html) — shipped in v0.2 milestone 4
 - [ ] HTML validation for the *target* page
 - [ ] Expanded scenario actions (scroll, select, keyboard combos)
 

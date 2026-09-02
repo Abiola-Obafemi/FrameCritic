@@ -23,6 +23,7 @@ No cloud, no AI, no accounts.
 
 Usage:
   framecritic scan <url> [options]
+  framecritic scan <base-url> --routes <routes.json> [options]   (multi-route)
   framecritic compare <baseline.json> <current.json> [options]
   framecritic <url> [options]          (shorthand)
 
@@ -34,6 +35,8 @@ Options (scan):
   --sweep <min>:<max>:<step> Responsive width sweep (e.g. 320:1200:160)
                              Generates widths from min to max inclusive, step step,
                              fixed height 900 (stable, not every responsive state), max 12 widths
+  --routes <file>            Declarative routes manifest JSON (max 20 routes, each {name, path, scenario?})
+                             Resolves relative paths against base URL, per-route isolated artifacts in routes/<name>/
   --config <path>            Path to .framecritic.json (default: ./.framecritic.json if present)
   --fail-on <mode>           CI gate: error|warning|never (default: error)
   --max-warnings <n>         Max warnings allowed before failing (default: no limit; 0 = no warnings)
@@ -42,7 +45,7 @@ Options (scan):
   --trace                    Capture Playwright trace (stored in traces/*.zip)
   --a11y                     Run automated accessibility scan on target page (axe-core, opt-in)
   --open                     Open report.html in default browser after scan
-  Note: --sweep and --viewport are mutually exclusive
+  Note: --sweep and --viewport are mutually exclusive; --routes and --scenario are mutually exclusive
 
 Options (compare):
   --output <dir>            Output directory for comparison (default: framecritic-out/comparison-<timestamp>)
@@ -260,6 +263,61 @@ if (isMain) {
 
   const outDir = parsed.output ?? path.join(process.cwd(), "framecritic-out", `scan-${Date.now()}`);
 
+  const policyOpts = {
+    failOn: parsed.failOn ?? "error" as const,
+    maxWarnings: parsed.maxWarnings,
+  };
+
+  // Multi-route batch mode
+  if (parsed.routes) {
+    console.log(`[FrameCritic] Batch scanning ${url} with routes ${parsed.routes}`);
+    if (parsed.sweep) console.log(`[FrameCritic] Sweep: ${parsed.sweep} → ${parsed.viewports?.length ?? 0} widths (fixed height 900)`);
+    if (parsed.viewports) console.log(`[FrameCritic] Viewports: ${parsed.viewports.map((v) => `${v.label} ${v.width}×${v.height}`).join(", ")}`);
+    if (parsed.trace) console.log(`[FrameCritic] Trace: enabled`);
+    if (parsed.a11y) console.log(`[FrameCritic] Accessibility: enabled (axe-core)`);
+    console.log(`[FrameCritic] Output → ${outDir}`);
+    try {
+      const { scanBatch } = await import("./engine/batch.js");
+      const { evaluatePolicy } = await import("./policy.js");
+      const batch = await scanBatch({
+        baseUrl: url,
+        routesManifestPath: parsed.routes,
+        outDir,
+        viewports: parsed.viewports as any,
+        configPath: parsed.config,
+        policy: policyOpts,
+        trace: parsed.trace,
+        a11y: parsed.a11y,
+      });
+      console.log(`\n[FrameCritic] Batch complete: ${batch.routes.length} routes`);
+      for (const r of batch.routes) {
+        const status = r.status === "ok" ? `${r.summary?.errors ?? 0} err, ${r.summary?.warnings ?? 0} warn` : `ERROR: ${r.error?.slice(0,120)}`;
+        console.log(`  ${r.name.padEnd(16)} ${r.path.padEnd(20)} ${r.url} → ${status} — ${r.reportPath ?? "no report"}`);
+      }
+      console.log(`  summary: ${batch.summary.errors} errors, ${batch.summary.warnings} warnings, ${batch.summary.total} total`);
+      console.log(`  batch.json → ${path.join(outDir, "batch.json")}`);
+      console.log(`  index.html → ${path.join(outDir, "index.html")}`);
+      // policy evaluation on aggregated summary
+      const pol = evaluatePolicy(batch.summary, policyOpts);
+      console.log(`  policy: fail-on=${pol.failOn}${pol.maxWarnings !== undefined ? ` max-warnings=${pol.maxWarnings}` : ""} → ${pol.failed ? "FAIL" : "PASS"} — ${pol.reason} (exit ${pol.exitCode})`);
+      if (parsed.jsonSummary) {
+        const obj = { url: batch.baseUrl, timestamp: batch.timestamp, outDir, summary: batch.summary, policy: pol, routes: batch.routes };
+        try { fs.writeFileSync(path.join(outDir, "json-summary.json"), JSON.stringify(obj, null, 2), "utf-8"); } catch {}
+        console.log("  --json-summary");
+        console.log(JSON.stringify(obj));
+      }
+      if (parsed.open) {
+        const htmlPath = path.join(outDir, "index.html");
+        console.log(`[FrameCritic] Opening ${htmlPath}`);
+        openInBrowser(htmlPath);
+      }
+      process.exit(pol.exitCode);
+    } catch (e: any) {
+      console.error(`\n[FrameCritic] Batch scan failed: ${e?.message ?? String(e)}`);
+      process.exit(1);
+    }
+  }
+
   console.log(`[FrameCritic] Scanning ${url}`);
   if (parsed.sweep) {
     console.log(`[FrameCritic] Sweep: ${parsed.sweep} → ${parsed.viewports?.length ?? 0} widths (fixed height 900)`);
@@ -277,11 +335,6 @@ if (isMain) {
     console.log(`[FrameCritic] Accessibility: enabled (axe-core)`);
   }
   console.log(`[FrameCritic] Output → ${outDir}`);
-
-  const policyOpts = {
-    failOn: parsed.failOn ?? "error" as const,
-    maxWarnings: parsed.maxWarnings,
-  };
 
   let report: Awaited<ReturnType<typeof scanUrl>>;
   try {

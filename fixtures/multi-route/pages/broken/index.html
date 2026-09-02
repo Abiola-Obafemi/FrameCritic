@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Multi-route Broken — defective</title>
+<style>body{margin:0;font-family:system-ui;padding:20px}h1{color:#b42348}.wide{width:800px;background:#ff4d6a;color:#fff;padding:16px;margin:20px -20px;border-radius:8px}</style>
+</head>
+<body>
+<h1>Broken — Intentionally Defective</h1>
+<div class="wide">Wide 800px banner causing horizontal overflow on most viewports</div>
+<img src="/does-not-exist-broken.png" alt="broken image test">
+<p>This route intentionally has overflow and broken image to demonstrate batch defective detection.</p>
+<script>console.error('intentional broken route error');</script>
+</body>
+</html>

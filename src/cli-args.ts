@@ -87,6 +87,7 @@ export type ParsedArgs = {
   scenario?: string;
   trace?: boolean;
   a11y?: boolean;
+  routes?: string;
   // compare specific
   compareBaseline?: string;
   compareCurrent?: string;
@@ -115,6 +116,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let trace = false;
   let a11y = false;
   let sweep: string | undefined;
+  let routes: string | undefined;
   let failOnNew = false;
   const positional: string[] = [];
 
@@ -224,6 +226,19 @@ export function parseArgs(argv: string[]): ParsedArgs {
       sweep = raw;
       continue;
     }
+    if (a === "--routes") {
+      const raw = argv[i + 1];
+      if (!raw || raw.startsWith("-")) throw new Error(`--routes requires a file path to routes JSON`);
+      routes = raw;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--routes=")) {
+      const raw = a.slice("--routes=".length);
+      if (!raw) throw new Error(`--routes requires a file path to routes JSON`);
+      routes = raw;
+      continue;
+    }
     if (a === "--scenario") {
       const raw = argv[i + 1];
       if (!raw || raw.startsWith("-")) throw new Error(`--scenario requires a file path`);
@@ -258,6 +273,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (sweep) {
     viewports = parseSweep(sweep);
   }
+  if (routes && scenario) {
+    throw new Error(`Cannot combine --routes and --scenario; specify scenario per-route in the routes manifest instead`);
+  }
 
   // handle compare positional args
   if (command === "compare") {
@@ -278,6 +296,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       scenario,
       trace,
       a11y,
+      routes,
       compareBaseline: positional[0],
       compareCurrent: positional[1],
       failOnNew,
@@ -287,5 +306,5 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (positional.length > 0) url = positional[0];
   if (positional.length > 1 && !output) output = positional[1];
 
-  return { command, url, output, open, viewports, sweep, help: false, config, failOn, maxWarnings, jsonSummary, scenario, trace, a11y, failOnNew };
+  return { command, url, output, open, viewports, sweep, routes, help: false, config, failOn, maxWarnings, jsonSummary, scenario, trace, a11y, failOnNew };
 }
