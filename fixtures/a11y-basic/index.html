@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>A11y Fixture — intentional violations</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui;padding:20px;line-height:1.5}
+.wrap{max-width:800px;margin:0 auto}
+img{max-width:300px;display:block;margin:12px 0;border:1px solid #ccc}
+label{display:block;margin-top:16px;font-weight:600}
+input{padding:8px;border:1px solid #999;border-radius:6px;width:300px}
+.badge{display:inline-block;padding:4px 8px;background:#eee;border-radius:6px;font-size:12px}
+.good{border:2px solid #1a7f4b;padding:16px;border-radius:10px;margin-top:24px}
+.bad{border:2px solid #b42348;padding:16px;border-radius:10px;margin-top:16px}
+</style>
+</head>
+<body>
+<main class="wrap">
+<h1>A11y Basic Fixture</h1>
+<p>This page intentionally contains accessibility violations for automated testing.</p>
+
+<div class="bad">
+<h2>Violations (should be flagged)</h2>
+<!-- Missing alt: axe rule image-alt / image-alt -->
+<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='120'%3E%3Crect width='300' height='120' fill='%23ff4d6a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='18'%3ENo Alt Image%3C/text%3E%3C/svg%3E">
+<span class="badge">Image without alt attribute above</span>
+
+<!-- Unlabeled input: axe rule label -->
+<div style="margin-top:16px">
+<input type="text" id="unlabeledInput">
+<span class="badge">Unlabeled input (no &lt;label&gt; association, no placeholder)</span>
+</div>
+
+<!-- Another violation: button without accessible name -->
+<button id="emptyButton" style="margin-top:16px;width:40px;height:40px;background:#7c5cff;border:0;border-radius:8px" title=""></button>
+<span class="badge">Empty button without text or aria-label</span>
+</div>
+
+<div class="good">
+<h2>Clean counterparts (should NOT be flagged)</h2>
+<!-- Clean image with alt -->
+<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='120'%3E%3Crect width='300' height='120' fill='%232ecc71'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-size='18'%3EGood Image%3C/text%3E%3C/svg%3E" alt="Green banner with Good Image text">
+<span class="badge">Image with alt="Green banner..."</span>
+
+<div style="margin-top:16px">
+<label for="cleanInput">Your name</label>
+<input type="text" id="cleanInput" placeholder="Enter name">
+<span class="badge">Labeled input</span>
+</div>
+
+<button style="margin-top:16px;padding:8px 16px;background:#1a7f4b;color:#fff;border:0;border-radius:8px">Submit</button>
+<span class="badge">Button with accessible text</span>
+</div>
+
+<p class="badge" style="margin-top:20px">Disclaimer: Automated checks are not WCAG certification.</p>
+</main>
+</body>
+</html>

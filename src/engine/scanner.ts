@@ -1,7 +1,7 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox, type PolicyOptions } from "../types.js";
+import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox, type PolicyOptions, ARTIFACT_VERSION, type Manifest } from "../types.js";
 import { collectPageFindings } from "./detect.js";
 import { generateHtmlReport } from "./report.js";
 import { generateAgentFixesMarkdown } from "./agentFixes.js";
@@ -9,6 +9,7 @@ import { loadConfig, applyIgnoreRules } from "../config.js";
 import { evaluatePolicy } from "../policy.js";
 import { loadScenario, executeScenario } from "../scenario.js";
 import { redactUrl } from "../security.js";
+import { collectA11yFindings } from "./a11y.js";
 
 export type ScanOptions = {
   url: string;
@@ -18,6 +19,7 @@ export type ScanOptions = {
   policy?: PolicyOptions;
   scenarioPath?: string;
   trace?: boolean;
+  a11y?: boolean;
 };
 
 function normalizeUrl(input: string): string {
@@ -139,6 +141,30 @@ function buildAnnotationBoxes(findings: Finding[]): { boxes: AnnotationBox[] } {
           });
           ids.push(nextId++);
         }
+      }
+    } else if (f.type === "accessibility") {
+      for (const n of d.nodes ?? []) {
+        if (!n?.rect) continue;
+        // only annotate if meaningful rect: at least 4px in one dimension or explicit hotspot
+        const w = typeof n.rect.w === "number" ? n.rect.w : 0;
+        const h = typeof n.rect.h === "number" ? n.rect.h : 0;
+        const meaningful = (w > 4 && h > 4) || (w > 0 && h > 0);
+        if (!meaningful) continue;
+        const x = typeof n.rect.x === "number" ? n.rect.x : 0;
+        const y = typeof n.rect.y === "number" ? n.rect.y : 0;
+        boxes.push({
+          id: nextId,
+          x,
+          y,
+          w: Math.max(w, 12),
+          h: Math.max(h, 12),
+          type: f.type,
+          severity: f.severity,
+          label: `a11y:${d.rule ?? "violation"}`,
+          selector: n.selector ?? n.target?.join?.(" ") ?? "",
+        });
+        ids.push(nextId++);
+        if (ids.length >= 12) break; // cap per finding
       }
     }
     if (ids.length) f.markerIds = ids;
@@ -333,8 +359,24 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
       }
 
       const rawFindings = await collectPageFindings(page, vp.label, consoleErrors, pageErrors);
-      // merge scenario failure findings + detection findings
-      const findings = [...scenarioFindings.map(f => ({ ...f })), ...rawFindings];
+      let a11yFindings: Finding[] = [];
+      if (opts.a11y) {
+        try {
+          a11yFindings = await collectA11yFindings(page, vp.label);
+          // tag scenario if active for consistency
+          if (scenario) for (const f of a11yFindings) if (!f.scenario) f.scenario = scenario.name;
+        } catch (e: any) {
+          a11yFindings = [{
+            type: "accessibility",
+            severity: "warning",
+            viewport: vp.label,
+            message: `[a11y] Accessibility scan error: ${String(e?.message ?? e).slice(0,300)}`,
+            details: { error: String(e?.message ?? e).slice(0,1000), disclaimer: "Automated accessibility check — NOT WCAG compliance certification." },
+          }];
+        }
+      }
+      // merge scenario failure findings + detection findings + a11y
+      const findings = [...scenarioFindings.map(f => ({ ...f })), ...rawFindings, ...a11yFindings];
       // tag scenario name on all findings when scenario active
       if (scenario) {
         for (const f of findings) {
@@ -422,7 +464,27 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     policyDecision = evaluatePolicy(summary, { failOn: "error" });
   }
 
+  const screenshots = results.flatMap((r) => {
+    const arr = [r.screenshot];
+    if (r.annotatedScreenshot) arr.push(r.annotatedScreenshot);
+    return arr;
+  });
+  const manifest: Manifest = {
+    artifactVersion: ARTIFACT_VERSION,
+    generatedAt: timestamp,
+    kind: "single",
+    artifacts: {
+      findings: "findings.json",
+      report: "report.html",
+      agentFixes: "AGENT_FIXES.md",
+      manifest: "manifest.json",
+      screenshots,
+      traces: traceFiles.length ? [...traceFiles] : undefined,
+    },
+  };
+
   const report: ScanReport = {
+    artifactVersion: ARTIFACT_VERSION,
     url,
     timestamp,
     viewports,
@@ -433,6 +495,8 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
     policy: policyDecision,
     scenario: scenario ? { name: scenario.name, steps: scenario.steps, file: opts.scenarioPath ?? null } as any : null,
     trace: opts.trace ? { enabled: true, files: traceFiles } : null,
+    a11y: opts.a11y ? { enabled: true } : null,
+    manifest,
   };
 
   await writeFile(path.join(outDir, "findings.json"), JSON.stringify(report, null, 2), "utf-8");
@@ -440,6 +504,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
   await writeFile(path.join(outDir, "report.html"), html, "utf-8");
   const fixesMd = generateAgentFixesMarkdown(report);
   await writeFile(path.join(outDir, "AGENT_FIXES.md"), fixesMd, "utf-8");
+  await writeFile(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8");
 
   return report;
 }

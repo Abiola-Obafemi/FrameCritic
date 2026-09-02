@@ -1,0 +1,7 @@
+{
+  "name": "select option",
+  "steps": [
+    { "action": "select", "selector": "#choice", "value": "beta" },
+    { "action": "wait", "ms": 200 }
+  ]
+}

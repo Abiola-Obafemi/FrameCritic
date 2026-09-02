@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Scenario Select Fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui;padding:20px}
+label{font-weight:600;display:block;margin-bottom:8px}
+select{padding:8px;border:1px solid #999;border-radius:6px;min-width:200px}
+#out{margin-top:20px;padding:12px;background:#eef;border-radius:8px;min-height:40px}
+</style>
+</head>
+<body>
+<h1>Select Fixture</h1>
+<label for="choice">Choose option</label>
+<select id="choice">
+  <option value="">--select--</option>
+  <option value="alpha">Alpha</option>
+  <option value="beta">Beta</option>
+  <option value="gamma">Gamma</option>
+</select>
+<div id="out">not selected</div>
+<script>
+document.getElementById('choice').addEventListener('change', (e)=>{
+  document.getElementById('out').textContent = 'selected:'+e.target.value;
+});
+</script>
+</body>
+</html>

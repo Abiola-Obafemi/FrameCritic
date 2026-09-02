@@ -1,0 +1,9 @@
+{
+  "name": "hotkey combos",
+  "steps": [
+    { "action": "hotkey", "key": "Escape" },
+    { "action": "wait", "ms": 200 },
+    { "action": "hotkey", "key": "Shift+Tab" },
+    { "action": "wait", "ms": 150 }
+  ]
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sweep Breakpoint Fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui;padding:0}
+header{background:#111;color:#fff;padding:16px 20px}
+.banner{
+  width:600px;
+  background:#ff4d6a;
+  color:#fff;
+  padding:16px 20px;
+  margin:20px;
+  border-radius:8px;
+  font-weight:700;
+}
+.content{padding:20px}
+.note{margin:20px;padding:12px;background:#eef;border-radius:8px;font-size:13px}
+/* above 700px banner becomes responsive and no longer overflows */
+@media (min-width: 700px){
+  .banner{ width:auto; max-width:100%; background:#2ecc71;}
+}
+</style>
+</head>
+<body>
+<header>Sweep Breakpoint Demo</header>
+<div class="banner">Fixed 600px banner — overflows when viewport &lt; 600, responsive when ≥ 700</div>
+<div class="content">
+<p>This fixture is intentionally breakpoint-sensitive. Horizontal overflow appears only on viewports narrower than ~600px.</p>
+<p>Sweep from 320:900:80 should catch the transition; single preset desktop (1440) would miss it if it were only overflow, and sweep shows exactly which widths are affected.</p>
+</div>
+<div class="note">Height is stable 900 for sweep widths. Overflow detection uses scrollWidth vs viewportWidth.</div>
+</body>
+</html>

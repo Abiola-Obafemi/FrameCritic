@@ -1,0 +1,6 @@
+{
+  "routes": [
+    { "name": "home", "path": "/" },
+    { "name": "broken", "path": "/broken" }
+  ]
+}

@@ -29,12 +29,56 @@ export function parseViewportList(raw: string | undefined): Viewport[] | null {
   return out.filter((v) => (seen.has(v.label) ? false : (seen.add(v.label), true)));
 }
 
+export const SWEEP_HEIGHT = 900;
+export const SWEEP_MAX_WIDTHS = 12;
+
+export function parseSweep(raw: string): Viewport[] {
+  if (!raw || typeof raw !== "string") throw new Error(`--sweep requires a value <min>:<max>:<step> (e.g. 320:1200:160)`);
+  const s = raw.trim();
+  const parts = s.split(":").map((p) => p.trim());
+  if (parts.length !== 3) throw new Error(`--sweep requires format <min>:<max>:<step> (e.g. 320:1200:160) got "${raw}"`);
+  const [minS, maxS, stepS] = parts;
+  const min = Number(minS);
+  const max = Number(maxS);
+  const step = Number(stepS);
+  if (!Number.isInteger(min) || !Number.isInteger(max) || !Number.isInteger(step)) {
+    throw new Error(`--sweep values must be positive integers (got "${raw}")`);
+  }
+  if (min < 200 || min > 4000 || max < 200 || max > 4000) {
+    throw new Error(`--sweep min/max must be between 200 and 4000 (got "${raw}")`);
+  }
+  if (step < 1 || step > 4000) {
+    throw new Error(`--sweep step must be between 1 and 4000 (got "${raw}")`);
+  }
+  if (min > max) {
+    throw new Error(`--sweep min must be <= max (got "${raw}")`);
+  }
+  const widths: number[] = [];
+  for (let w = min; w <= max; w += step) {
+    widths.push(w);
+    if (widths.length > SWEEP_MAX_WIDTHS) break;
+  }
+  if (widths.length > SWEEP_MAX_WIDTHS) {
+    throw new Error(`--sweep would generate ${widths.length} widths — hard cap is ${SWEEP_MAX_WIDTHS} (got "${raw}"). Increase step or reduce range.`);
+  }
+  if (widths.length === 0) throw new Error(`--sweep produced no widths (got "${raw}")`);
+  // Defensive: if loop stopped early due to cap, also error with count?
+  // Already handled >12 case. For exactly 12 it's allowed, but we already checked.
+  // Re-check total that would have been generated without cap to give precise error.
+  const totalWouldBe = Math.floor((max - min) / step) + 1;
+  if (totalWouldBe > SWEEP_MAX_WIDTHS) {
+    throw new Error(`--sweep would generate ${totalWouldBe} widths — hard cap is ${SWEEP_MAX_WIDTHS} (got "${raw}"). Increase step or reduce range.`);
+  }
+  return widths.map((w) => ({ label: `sweep-${w}`, width: w, height: SWEEP_HEIGHT }));
+}
+
 export type ParsedArgs = {
   command: "scan" | "compare" | "help" | "version";
   url?: string;
   output?: string;
   open: boolean;
   viewports?: Viewport[];
+  sweep?: string;
   help: boolean;
   config?: string;
   failOn?: "error" | "warning" | "never";
@@ -42,6 +86,8 @@ export type ParsedArgs = {
   jsonSummary?: boolean;
   scenario?: string;
   trace?: boolean;
+  a11y?: boolean;
+  routes?: string;
   // compare specific
   compareBaseline?: string;
   compareCurrent?: string;
@@ -68,6 +114,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
   let jsonSummary = false;
   let scenario: string | undefined;
   let trace = false;
+  let a11y = false;
+  let sweep: string | undefined;
+  let routes: string | undefined;
   let failOnNew = false;
   const positional: string[] = [];
 
@@ -160,6 +209,36 @@ export function parseArgs(argv: string[]): ParsedArgs {
       trace = true;
       continue;
     }
+    if (a === "--a11y") {
+      a11y = true;
+      continue;
+    }
+    if (a === "--sweep") {
+      const raw = argv[i + 1];
+      if (!raw || raw.startsWith("-")) throw new Error(`--sweep requires a value <min>:<max>:<step> (e.g. 320:1200:160)`);
+      sweep = raw;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--sweep=")) {
+      const raw = a.slice("--sweep=".length);
+      if (!raw) throw new Error(`--sweep requires a value <min>:<max>:<step>`);
+      sweep = raw;
+      continue;
+    }
+    if (a === "--routes") {
+      const raw = argv[i + 1];
+      if (!raw || raw.startsWith("-")) throw new Error(`--routes requires a file path to routes JSON`);
+      routes = raw;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--routes=")) {
+      const raw = a.slice("--routes=".length);
+      if (!raw) throw new Error(`--routes requires a file path to routes JSON`);
+      routes = raw;
+      continue;
+    }
     if (a === "--scenario") {
       const raw = argv[i + 1];
       if (!raw || raw.startsWith("-")) throw new Error(`--scenario requires a file path`);
@@ -187,6 +266,17 @@ export function parseArgs(argv: string[]): ParsedArgs {
     positional.push(a);
   }
 
+  // handle sweep vs viewport conflict and generation
+  if (sweep && viewports) {
+    throw new Error(`Cannot combine --sweep and --viewport; use one or the other`);
+  }
+  if (sweep) {
+    viewports = parseSweep(sweep);
+  }
+  if (routes && scenario) {
+    throw new Error(`Cannot combine --routes and --scenario; specify scenario per-route in the routes manifest instead`);
+  }
+
   // handle compare positional args
   if (command === "compare") {
     if (positional.length < 2) {
@@ -197,6 +287,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       output,
       open,
       viewports,
+      sweep,
       help: false,
       config,
       failOn,
@@ -204,6 +295,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       jsonSummary,
       scenario,
       trace,
+      a11y,
+      routes,
       compareBaseline: positional[0],
       compareCurrent: positional[1],
       failOnNew,
@@ -213,5 +306,5 @@ export function parseArgs(argv: string[]): ParsedArgs {
   if (positional.length > 0) url = positional[0];
   if (positional.length > 1 && !output) output = positional[1];
 
-  return { command, url, output, open, viewports, help: false, config, failOn, maxWarnings, jsonSummary, scenario, trace, failOnNew };
+  return { command, url, output, open, viewports, sweep, routes, help: false, config, failOn, maxWarnings, jsonSummary, scenario, trace, a11y, failOnNew };
 }

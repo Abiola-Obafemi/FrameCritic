@@ -15,7 +15,8 @@ export type Finding = {
     | "overlapping-elements"
     | "broken-image"
     | "console-error"
-    | "page-error";
+    | "page-error"
+    | "accessibility";
   severity: Severity;
   viewport: string;
   message: string;
@@ -70,7 +71,7 @@ export type PolicyDecision = {
 
 export type ScenarioInfo = {
   name: string;
-  steps: Array<{ action: string; selector?: string; value?: string; key?: string; ms?: number }>;
+  steps: Array<{ action: string; selector?: string; value?: string; key?: string; ms?: number; x?: number; y?: number }>;
   file?: string;
 };
 
@@ -79,7 +80,31 @@ export type TraceInfo = {
   files: string[]; // relative paths
 };
 
+export type A11yInfo = {
+  enabled: boolean;
+};
+
+export const ARTIFACT_VERSION = "0.2";
+
+export type Manifest = {
+  artifactVersion: string;
+  generatedAt: string;
+  kind: "single" | "batch";
+  artifacts: {
+    findings: string;
+    report: string;
+    agentFixes: string;
+    manifest: string;
+    screenshots: string[];
+    traces?: string[];
+    batch?: string;
+    index?: string;
+    routes?: string[];
+  };
+};
+
 export type ScanReport = {
+  artifactVersion?: string;
   url: string;
   timestamp: string;
   viewports: Viewport[];
@@ -90,4 +115,6 @@ export type ScanReport = {
   policy?: PolicyDecision;
   scenario?: ScenarioInfo | null;
   trace?: TraceInfo | null;
+  a11y?: A11yInfo | null;
+  manifest?: Manifest;
 };

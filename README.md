@@ -61,6 +61,10 @@ npx framecritic scan http://localhost:3001 --config ./my-config.json
 
 # Scenario (declarative, no code execution)
 npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-menu/scenario.json
+# Extended actions: scroll, select, hotkey (modifiers+key) — all validated, no eval
+npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-select/scenario.json
+npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-scroll/scenario.json
+npx framecritic scan http://localhost:3001 --scenario ./fixtures/scenario-hotkey/scenario.json
 
 # Structural compare (not pixel diff)
 npx framecritic compare ./baseline/findings.json ./current/findings.json --fail-on-new
@@ -68,6 +72,19 @@ npx framecritic compare ./baseline/findings.json ./current/findings.json --fail-
 # Optional trace (off by default)
 npx framecritic scan http://localhost:3001 --trace
 # traces: framecritic-out/scan-*/traces/*.zip  (view with npx playwright show-trace)
+
+# Accessibility diagnostics (opt-in, against TARGET page, NOT WCAG certification)
+npx framecritic scan http://localhost:3001 --a11y
+# -> findings of type accessibility with rule/impact/nodes/selectors/rects
+
+# Bounded responsive sweep (fixed height 900, max 12 widths)
+npx framecritic scan http://localhost:3001 --sweep 320:1200:160
+# -> generates sweep-320, sweep-480, ... deterministic labels
+
+# Multi-route batch (max 20, declarative JSON, isolated routes/<name>/)
+# routes.json -> { "routes": [{ "name": "home", "path": "/" }, { "name": "broken", "path": "/broken" }] }
+npx framecritic scan http://localhost:3001 --routes ./fixtures/multi-route/routes.json
+# -> batch.json + index.html linking each route report
 
 # Dashboard
 npm start
@@ -115,17 +132,20 @@ Report highlights:
 - **Config:** `.framecritic.json` with `ignore.selectors / types / viewports` (auto-discovered, `--config` override, validated, no code execution, suppression recorded in `findings.json` and report)
 - **CI gate:** `--fail-on error|warning|never` + `--max-warnings N` + `--json-summary` (deterministic exit codes 0/1/2, policy in `findings.json`, terminal and report show policy)
 - **Compare:** `framecritic compare <baseline> <current>` classifies NEW/RESOLVED/PERSISTING via stable fingerprints (type+viewport+normalized selectors), produces `comparison.json` + `comparison.html`, optional `--fail-on-new`
-- **Scenario:** `--scenario <file>` declarative JSON (click/fill/hover/press/wait, validated, no eval), runs per viewport, failure becomes explicit `page-error`, findings tagged with scenario name
+- **Scenario:** `--scenario <file>` declarative JSON (click/fill/hover/press/wait/scroll/select/hotkey, validated, no eval), runs per viewport, failure becomes explicit `page-error`, findings tagged with scenario name
 - **Trace:** `--trace` captures Playwright trace per viewport to `traces/*.zip` (off by default), reported in terminal/JSON/HTML (`npx playwright show-trace`)
+- **Accessibility (opt-in):** `--a11y` runs axe-core against the TARGET page (not the report) and emits structured `accessibility` findings with rule, impact, nodes, selectors and rects where measurable, integrated into `findings.json`/`report.html`/`AGENT_FIXES.md`; labeled as automated diagnostics, NOT WCAG certification
+- **Sweep (opt-in):** `--sweep <min>:<max>:<step>` generates bounded sweep viewports (fixed height 900, max 12 widths, labels `sweep-<width>`), reuses detector pipeline, outputs navigable report with per-width findings
+- **Multi-route (opt-in):** `framecritic scan <base-url> --routes <routes.json>` bounded batch (max 20 routes, declarative `{routes:[{name,path,scenario?}]}`), resolves relative paths against base safely, isolates per-route artifacts in `routes/<name>/`, produces `batch.json` + `index.html` linking each `report.html`, aggregates counts while preserving route identity, continues on per-route failure
 - **GitHub Actions:** `.github/workflows/ci.yml` for FrameCritic itself and `docs/github-actions-example.yml` for consumers
 - **Packaging:** `npm pack` verified — contains `dist/`, `public/`, `README`, `LICENSE` (no `src/`, tests, fixtures, secrets, `framecritic-out`)
 
 ## Architecture overview
 
-```
+``` 
 framecritic/
 ├── src/
-│   ├── cli.ts            — CLI (scan/compare, --output/--viewport/--config/--fail-on/--max-warnings/--json-summary/--scenario/--trace)
+│   ├── cli.ts            — CLI (scan/compare, --output/--viewport/--sweep/--routes/--config/--fail-on/--max-warnings/--json-summary/--scenario/--trace/--a11y)
 │   ├── cli-args.ts       — argument parser (exported for tests)
 │   ├── config.ts         — .framecritic.json loading + validation + ignore matching
 │   ├── policy.ts         — CI gate evaluation (exit codes 0/1/2)
@@ -135,13 +155,15 @@ framecritic/
 │   ├── server.ts         — Express dashboard (POST /api/scan, GET /reports)
 │   ├── types.ts          — Viewport, Finding, AnnotationBox, ScanReport, Policy, Scenario
 │   └── engine/
-│       ├── scanner.ts    — Playwright capture @ deviceScaleFactor 1, scenario/trace, annotation, artifact writer
+│       ├── scanner.ts    — Playwright capture @ deviceScaleFactor 1, scenario/trace/a11y, annotation, artifact writer
+│       ├── batch.ts      — multi-route orchestration (bounded manifest, per-route isolated dirs, batch.json + index.html)
 │       ├── detect.ts     — in-page script (scrollWidth, getBoundingClientRect, overlap, broken images)
-│       ├── report.ts     — accessible HTML report with filters/tabs/summary/scenario/trace/policy
+│       ├── a11y.ts       — axe-core injection + target-page diagnostics (opt-in --a11y)
+│       ├── report.ts     — accessible HTML report with filters/tabs/summary/scenario/trace/policy/a11y
 │       └── agentFixes.ts — AGENT_FIXES.md generation per finding
 ├── public/index.html     — local dashboard (no build step)
 ├── demo-app/             — intentionally broken fixture (not shipped)
-├── fixtures/             — scenario-menu/modal/hover + saas-dashboard + landing-page (not shipped)
+├── fixtures/             — multi-route, a11y-basic, sweep-breakpoint, scenario-* (not shipped)
 ├── docs/assets/          — real generated demo annotated PNG (committed)
 └── framecritic-out/      — per-scan artifacts (ignored in git/npm)
 ```
@@ -165,17 +187,18 @@ framecritic/
 | **broken-image** | error | `images[]` with `src`, `alt`, `selector`, `rect` | ✓ per broken image | `!complete || naturalWidth===0` with `src`; includes collapsed `rect` fallback |
 | **console-error** | error | `text`, `location {url,line,col}` | ✗ | All `console.type==="error"` |
 | **page-error** | error / warning (status `>=500` → error else warning) | `status`, `url` or `stack`/`message` | ✗ | Failed `response.status >=400` (except `favicon.ico` 404), `pageerror` events, `page.goto` timeout |
+| **accessibility** (opt-in `--a11y`) | error if `critical`/`serious`, warning otherwise | `rule`, `impact`, `help`, `helpUrl`, `tags`, `nodes[]` with `selector`, `html`, `failureSummary`, `rect`, `affectedSelectors`, `disclaimer` | ✓ per node where meaningful `rect` | axe-core violations run against TARGET page; NOT WCAG certification; capped 12 nodes/violation; selector/rect used for annotation |
 
 Each detector runs independently per viewport; the same page can be clean on desktop and overflow on mobile. The demo triggers all six.
 
 ## Limitations (honest)
 
 - **Heuristics, not proof:** Overflow and overlap are geometry-based and can mis-fire on intentional designs (offscreen drawers, decorative overlaps). Use `.framecritic.json` to suppress known intentional cases and always confirm selector in source. Dogfooding the dashboard showed 15-pair overlap false positives inside scrollable findings containers — left as heuristic limitation, not detector weakening.
-- **Viewports:** Three presets plus custom `WxH`; no full responsive sweep.
+- **Viewports:** Three presets plus custom `WxH`, plus optional bounded sweep `--sweep <min>:<max>:<step>` (fixed height 900, max 12 widths, not every responsive state; document as not exhaustive).
 - **Chromium only:** Playwright `chromium` required.
-- **Scenario coverage:** Small safe set (click/fill/hover/press/wait, max 20 steps, wait ≤5000ms); no `eval`.
+- **Scenario coverage:** Safe declarative set (click/fill/hover/press/wait/scroll/select/hotkey, max 20 steps, wait ≤5000ms, scroll 0..10000, select value ≤1000, hotkey strict modifiers+key); no `eval`, no arbitrary JS.
 - **Trace:** Optional `--trace` only; large traces may affect disk/time.
-- **Accessibility is for the report, not the target:** Report is semantic/keyboard/focus/contrast compliant; target a11y not diagnosed.
+- **Accessibility (target):** Optional `--a11y` runs an automated axe-core scan against the TARGET page (not the report). Findings are deterministic diagnostics, NOT WCAG compliance certification; manual review is required. Report itself remains semantic/keyboard/focus/contrast compliant.
 - **No pixel diff:** Structural findings only; `compare` is fingerprint-based, not visual diff.
 - **Security:** Best-effort redaction (credentials, query tokens) and safe paths; not a full audit. See `src/security.ts`.
 - **Local artifacts:** `framecritic-out/` is local and untracked.
@@ -185,7 +208,11 @@ Each detector runs independently per viewport; the same page can be clean on des
 Planned, not promised:
 
 - [ ] More detectors: missing `alt`, empty interactive labels, large layout shift candidates, truncated text, z-order traps
-- [ ] HTML validation and axe pass for the *target* page
+- [x] axe-core pass for the *target* page (`--a11y` opt-in, automated diagnostics, NOT WCAG certification) — shipped in v0.2 milestone 1
+- [x] Bounded responsive width sweep (`--sweep <min>:<max>:<step>`, fixed height 900, max 12 widths) — shipped in v0.2 milestone 2
+- [x] Expanded scenario actions (scroll with bounded coordinates/selector, select for &lt;select&gt;, hotkey with strict modifiers+key validation) — shipped in v0.2 milestone 3
+- [x] Multi-route batch scan (`--routes <routes.json>`, max 20, declarative, per-route isolated artifacts, batch.json + index.html) — shipped in v0.2 milestone 4
+- [ ] HTML validation for the *target* page
 - [ ] Expanded scenario actions (scroll, select, keyboard combos)
 
 Out of scope: accounts, billing, cloud storage, AI inference, proxying, multi-tenant hosting.
