@@ -31,6 +31,9 @@ Options (scan):
   --viewport <list>          Viewports to scan (comma-separated)
                              Built-ins: mobile (390×844), tablet (768×1024), desktop (1440×900)
                              Custom:    390x844,768x1024  or  mobile,desktop
+  --sweep <min>:<max>:<step> Responsive width sweep (e.g. 320:1200:160)
+                             Generates widths from min to max inclusive, step step,
+                             fixed height 900 (stable, not every responsive state), max 12 widths
   --config <path>            Path to .framecritic.json (default: ./.framecritic.json if present)
   --fail-on <mode>           CI gate: error|warning|never (default: error)
   --max-warnings <n>         Max warnings allowed before failing (default: no limit; 0 = no warnings)
@@ -39,6 +42,7 @@ Options (scan):
   --trace                    Capture Playwright trace (stored in traces/*.zip)
   --a11y                     Run automated accessibility scan on target page (axe-core, opt-in)
   --open                     Open report.html in default browser after scan
+  Note: --sweep and --viewport are mutually exclusive
 
 Options (compare):
   --output <dir>            Output directory for comparison (default: framecritic-out/comparison-<timestamp>)
@@ -257,6 +261,9 @@ if (isMain) {
   const outDir = parsed.output ?? path.join(process.cwd(), "framecritic-out", `scan-${Date.now()}`);
 
   console.log(`[FrameCritic] Scanning ${url}`);
+  if (parsed.sweep) {
+    console.log(`[FrameCritic] Sweep: ${parsed.sweep} → ${parsed.viewports?.length ?? 0} widths (fixed height 900)`);
+  }
   if (parsed.viewports) {
     console.log(`[FrameCritic] Viewports: ${parsed.viewports.map((v) => `${v.label} ${v.width}×${v.height}`).join(", ")}`);
   }

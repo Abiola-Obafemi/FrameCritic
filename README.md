@@ -118,6 +118,7 @@ Report highlights:
 - **Scenario:** `--scenario <file>` declarative JSON (click/fill/hover/press/wait, validated, no eval), runs per viewport, failure becomes explicit `page-error`, findings tagged with scenario name
 - **Trace:** `--trace` captures Playwright trace per viewport to `traces/*.zip` (off by default), reported in terminal/JSON/HTML (`npx playwright show-trace`)
 - **Accessibility (opt-in):** `--a11y` runs axe-core against the TARGET page (not the report) and emits structured `accessibility` findings with rule, impact, nodes, selectors and rects where measurable, integrated into `findings.json`/`report.html`/`AGENT_FIXES.md`; labeled as automated diagnostics, NOT WCAG certification
+- **Sweep (opt-in):** `--sweep <min>:<max>:<step>` generates bounded sweep viewports (fixed height 900, max 12 widths, labels `sweep-<width>`), reuses detector pipeline, outputs navigable report with per-width findings
 - **GitHub Actions:** `.github/workflows/ci.yml` for FrameCritic itself and `docs/github-actions-example.yml` for consumers
 - **Packaging:** `npm pack` verified — contains `dist/`, `public/`, `README`, `LICENSE` (no `src/`, tests, fixtures, secrets, `framecritic-out`)
 
@@ -174,7 +175,7 @@ Each detector runs independently per viewport; the same page can be clean on des
 ## Limitations (honest)
 
 - **Heuristics, not proof:** Overflow and overlap are geometry-based and can mis-fire on intentional designs (offscreen drawers, decorative overlaps). Use `.framecritic.json` to suppress known intentional cases and always confirm selector in source. Dogfooding the dashboard showed 15-pair overlap false positives inside scrollable findings containers — left as heuristic limitation, not detector weakening.
-- **Viewports:** Three presets plus custom `WxH`; no full responsive sweep.
+- **Viewports:** Three presets plus custom `WxH`, plus optional bounded sweep `--sweep <min>:<max>:<step>` (fixed height 900, max 12 widths, not every responsive state; document as not exhaustive).
 - **Chromium only:** Playwright `chromium` required.
 - **Scenario coverage:** Small safe set (click/fill/hover/press/wait, max 20 steps, wait ≤5000ms); no `eval`.
 - **Trace:** Optional `--trace` only; large traces may affect disk/time.
@@ -188,7 +189,8 @@ Each detector runs independently per viewport; the same page can be clean on des
 Planned, not promised:
 
 - [ ] More detectors: missing `alt`, empty interactive labels, large layout shift candidates, truncated text, z-order traps
-- [x] axe-core pass for the *target* page (`--a11y` opt-in, automated diagnostics, NOT WCAG certification) — shipped in v0.2 milestone 1. HTML validation still planned
+- [x] axe-core pass for the *target* page (`--a11y` opt-in, automated diagnostics, NOT WCAG certification) — shipped in v0.2 milestone 1
+- [x] Bounded responsive width sweep (`--sweep <min>:<max>:<step>`, fixed height 900, max 12 widths) — shipped in v0.2 milestone 2
 - [ ] HTML validation for the *target* page
 - [ ] Expanded scenario actions (scroll, select, keyboard combos)
 
