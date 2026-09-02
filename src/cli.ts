@@ -38,7 +38,7 @@ Options (scan):
   --fail-on <mode>           CI gate: error|warning|never (default: error)
   --max-warnings <n>         Max warnings allowed before failing (default: no limit; 0 = no warnings)
   --json-summary             Emit machine-readable JSON summary to stdout and file
-  --scenario <file>          Declarative scenario JSON (click/fill/hover/press/wait)
+  --scenario <file>          Declarative scenario JSON (click/fill/hover/press/wait/scroll/select/hotkey, no eval)
   --trace                    Capture Playwright trace (stored in traces/*.zip)
   --a11y                     Run automated accessibility scan on target page (axe-core, opt-in)
   --open                     Open report.html in default browser after scan

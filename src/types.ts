@@ -71,7 +71,7 @@ export type PolicyDecision = {
 
 export type ScenarioInfo = {
   name: string;
-  steps: Array<{ action: string; selector?: string; value?: string; key?: string; ms?: number }>;
+  steps: Array<{ action: string; selector?: string; value?: string; key?: string; ms?: number; x?: number; y?: number }>;
   file?: string;
 };
 

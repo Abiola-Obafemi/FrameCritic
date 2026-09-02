@@ -1,0 +1,9 @@
+{
+  "name": "scroll to target and window",
+  "steps": [
+    { "action": "scroll", "selector": "#target" },
+    { "action": "wait", "ms": 200 },
+    { "action": "scroll", "x": 0, "y": 300 },
+    { "action": "wait", "ms": 200 }
+  ]
+}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Scenario Hotkey Fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui;padding:20px}
+#box{margin:20px 0;padding:20px;border:2px solid #7c5cff;border-radius:10px;min-height:80px}
+#out{padding:12px;background:#eef;border-radius:8px;min-height:40px}
+input{padding:8px;border:1px solid #999;border-radius:6px;width:300px}
+</style>
+</head>
+<body>
+<h1>Hotkey Fixture</h1>
+<p>Press hotkey combinations to trigger actions</p>
+<input id="field" placeholder="Focus here then press hotkey"/>
+<div id="box" tabindex="0">Box — press Escape or Control+A or Shift+Tab</div>
+<div id="out">no hotkey</div>
+<script>
+const out=document.getElementById('out');
+document.addEventListener('keydown', (e)=>{
+  const combo=[];
+  if(e.ctrlKey) combo.push('Control');
+  if(e.altKey) combo.push('Alt');
+  if(e.shiftKey) combo.push('Shift');
+  if(e.metaKey) combo.push('Meta');
+  let key=e.key;
+  if(key===' ') key='Space';
+  // record
+  const full=combo.length? combo.join('+')+'+'+key : key;
+  if(full==='Control+a' || full==='Control+A' || e.key.toLowerCase()==='a' && e.ctrlKey) { out.textContent='hotkey:Control+A'; e.preventDefault(); }
+  if(e.key==='Escape') { out.textContent='hotkey:Escape'; }
+  if(e.key==='Tab' && e.shiftKey) { out.textContent='hotkey:Shift+Tab'; e.preventDefault(); }
+  if(e.key==='F5') { out.textContent='hotkey:F5'; }
+});
+document.getElementById('box').addEventListener('keydown',(e)=>{
+  if(e.key==='Escape') { out.textContent='hotkey:Escape'; }
+});
+</script>
+</body>
+</html>
