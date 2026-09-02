@@ -12,6 +12,10 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: framecritic-cloud-builder
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -162,6 +166,50 @@ jobs:
         if: success()
         run: rm -f .cloud-agent-complete
 
+      - name: Require committed agent output
+        if: success()
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Cloud agent left uncommitted changes. Refusing to push partial output."
+            git status --short
+            exit 1
+          fi
+
+          COMMITS_AHEAD=$(git rev-list --count "${GITHUB_SHA}..HEAD")
+          if [ "$COMMITS_AHEAD" -lt 1 ]; then
+            echo "::error::Cloud agent marked the task complete without creating a commit."
+            exit 1
+          fi
+
+          echo "Agent produced $COMMITS_AHEAD committed change(s)."
+
+      - name: Install project dependencies
+        if: success()
+        run: npm ci
+
+      - name: Build
+        if: success()
+        run: npm run build
+
+      - name: Install Playwright Chromium dependencies
+        if: success()
+        run: npx playwright install --with-deps chromium
+
+      - name: Test
+        if: success()
+        run: npm test
+
+      - name: Package smoke
+        if: success()
+        run: |
+          node scripts/package-smoke.js
+          npm pack --dry-run
+
+      - name: CLI smoke
+        if: success()
+        run: node dist/cli.js --help
+
       - name: Final verification
         if: success()
         run: |
@@ -173,11 +221,12 @@ jobs:
         run: |
           git push -u origin "$BRANCH"
 
-      - name: Open pull request
+      - name: Open draft pull request
         if: success()
         run: |
           gh pr create \
+            --draft \
             --base main \
             --head "$BRANCH" \
             --title "Cloud agent: automated engineering task" \
-            --body "Automated OpenCode cloud engineering run. Review commits, tests, and generated outputs before merging."
+            --body "Automated OpenCode cloud engineering run. Review commits, tests, and generated outputs before merging. This PR is intentionally opened as a draft. Cloud Builder hard gates passed before push: committed worktree, npm ci, build, Playwright Chromium install, tests, package smoke, npm pack dry-run, and CLI help."
