@@ -24,6 +24,15 @@ function getSelectors(f: Finding): string[] {
     case "broken-image":
       sels = (d.images ?? []).map((i: any) => i.selector).filter(Boolean);
       break;
+    case "accessibility":
+      // axe findings have rule + nodes selectors + affectedSelectors
+      sels = [
+        ...(d.nodes ?? []).map((n: any) => n.selector).filter(Boolean),
+        ...(d.affectedSelectors ?? []).filter(Boolean),
+      ];
+      // Include rule id to distinguish same selector with different rules
+      if (d.rule) sels.push(`rule:${d.rule}`);
+      break;
     default:
       sels = [];
   }
@@ -34,6 +43,12 @@ function normalizeMessage(msg: string): string {
   return msg.trim().replace(/\s+/g, " ").slice(0, 300);
 }
 
+function stripOriginForStability(s: string): string {
+  // Remove http(s) origins (including ports) for fingerprint stability across ephemeral ports.
+  // e.g. http://localhost:1234/path -> /path
+  return s.replace(/https?:\/\/[^/\s"']+/gi, "");
+}
+
 export function fingerprintFinding(f: Finding): string {
   const selectors = getSelectors(f);
   if (selectors.length) {
@@ -41,7 +56,8 @@ export function fingerprintFinding(f: Finding): string {
     return `${f.type}|${f.viewport}|${joined}`;
   }
   // For console/page errors without selectors, use message fingerprint
-  const msg = normalizeMessage(f.message);
+  // Strip origins to avoid ephemeral port instability, then normalize
+  const msg = stripOriginForStability(normalizeMessage(f.message));
   // include type and viewport and message prefix
   // Also include details text if available for more stable but ignore volatile fields like stack line numbers?
   // Use message only for now
@@ -151,7 +167,7 @@ export function compareReports(baselinePath: string, currentPath: string): Compa
 }
 
 function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function renderFinding(f: Finding): string {
