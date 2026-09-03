@@ -201,11 +201,14 @@ export function generateComparisonHtml(result: CompareResult): string {
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>FrameCritic Comparison — ${esc(timestamp)}</title>
 <style>
-:root{--bg:#0b0e14;--card:#151a25;--border:#232c43;--text:#e6e8ee;--muted:#b8c0d4;--err:#ff4d6a;--warn:#ffb020;--ok:#2ecc71;--info:#4da3ff}
-*{box-sizing:border-box}body{margin:0;font-family:ui-sans-system,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+:root{--bg:#0b0e14;--card:#151a25;--border:#232c43;--text:#e6e8ee;--muted:#b8c0d4;--err:#ff4d6a;--warn:#ffb020;--ok:#2ecc71;--info:#4da3ff;--focus:#7c5cff}
+*{box-sizing:border-box}*:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:2px}*:focus:not(:focus-visible){outline:none}
+.skip-link{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+.skip-link:focus{left:12px;top:12px;width:auto;height:auto;background:var(--card);color:var(--text);padding:8px 12px;border-radius:8px;border:1px solid var(--border);z-index:9999}
+body{margin:0;font-family:ui-sans-system,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
 header{max-width:1100px;margin:0 auto;padding:28px 20px 10px}
 h1{margin:6px 0 4px;font-size:24px}
-.meta{color:var(--muted);font-size:13px;word-break:break-all}
+.meta{color:var(--muted);font-size:13px;word-break:break-all;overflow-wrap:anywhere}
 .summary{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;min-width:140px;flex:1}
 .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
@@ -221,24 +224,26 @@ main{max-width:1100px;margin:0 auto;padding:18px 20px 40px}
 .badge.warn{background:#3a2d10;color:var(--warn);border-color:#6a4a10}
 .badge.info{background:#132a44;color:var(--info);border-color:#1e3a5a}
 .vp{font-size:11px;color:var(--muted);border:1px solid var(--border);padding:2px 7px;border-radius:999px;background:#0b0e14}
-.fp{font-size:10px;color:var(--muted);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.msg{margin-top:6px;font-size:13px;color:#d0d6e6}
-pre{margin:8px 0 0;background:#080a12;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;overflow:auto;max-height:220px;color:#cbd5e1}
+.fp{font-size:10px;color:var(--muted);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;overflow-wrap:anywhere;word-break:break-word}
+.fp-wrap{white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.msg{margin-top:6px;font-size:13px;color:#d0d6e6;overflow-wrap:anywhere;word-break:break-word}
+pre{margin:8px 0 0;background:#080a12;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;overflow:auto;max-height:220px;color:#cbd5e1;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
 .empty{color:var(--muted);font-size:13px;padding:8px}
 .persist-pair{border:1px solid var(--border);border-radius:10px;padding:10px;background:#0f1422}
 .pair-label{font-size:11px;color:var(--muted);margin-bottom:8px}
 .pair-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:700px){.pair-grid{grid-template-columns:1fr}}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;word-break:break-word}
 footer{max-width:1100px;margin:0 auto;padding:10px 20px 30px;color:var(--muted);font-size:12px;border-top:1px solid var(--border)}
 </style>
 </head>
 <body>
-<header>
-<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700">◐ FrameCritic — Comparison</div>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<header role="banner">
+<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700" aria-label="FrameCritic comparison report">◐ FrameCritic — Comparison</div>
 <h1>Structural Comparison</h1>
 <div class="meta">Baseline: <span class="mono">${esc(baselinePath)}</span><br>Current: <span class="mono">${esc(currentPath)}</span><br>Generated: <span class="mono">${esc(timestamp)}</span></div>
-<div class="summary">
+<div class="summary" role="status" aria-live="polite">
 <div class="stat"><div class="k">Baseline total</div><div class="v">${summary.totalBaseline}</div></div>
 <div class="stat"><div class="k" style="color:var(--err)">New</div><div class="v" style="color:var(--err)">${summary.new}</div></div>
 <div class="stat"><div class="k" style="color:var(--ok)">Resolved</div><div class="v" style="color:var(--ok)">${summary.resolved}</div></div>
@@ -246,12 +251,12 @@ footer{max-width:1100px;margin:0 auto;padding:10px 20px 30px;color:var(--muted);
 <div class="stat"><div class="k">Current total</div><div class="v">${summary.totalCurrent}</div></div>
 </div>
 </header>
-<main>
+<main id="main-content">
 ${section("NEW — regressions", summary.new, "var(--err)", newHtml)}
 ${section("RESOLVED — fixed", summary.resolved, "var(--ok)", resolvedHtml)}
 ${section("PERSISTING — still present", summary.persisting, "var(--muted)", persistingHtml)}
 </main>
-<footer>Generated locally by FrameCritic — fingerprints use type, viewport, normalized selectors (ignoring timestamps, screenshots, paths).</footer>
+<footer role="contentinfo">Generated locally by FrameCritic — fingerprints use type, viewport, normalized selectors (ignoring timestamps, screenshots, paths).</footer>
 </body>
 </html>`;
 }

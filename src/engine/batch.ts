@@ -75,19 +75,19 @@ function generateBatchHtml(batch: BatchReport, outDir: string): string {
 body{margin:0;font-family:ui-sans-system,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
 header{max-width:1200px;margin:0 auto;padding:28px 20px 10px}
 h1{margin:6px 0 4px;font-size:26px}
-.meta{color:var(--muted);font-size:13px}
+.meta{color:var(--muted);font-size:13px;word-break:break-all;overflow-wrap:anywhere}
 .summary{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;min-width:140px;flex:1}
 .stat .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .stat .v{font-size:22px;font-weight:700;margin-top:2px}
 table{width:100%;border-collapse:collapse;margin-top:18px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-th,td{padding:12px 14px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;font-size:13px}
+th,td{padding:12px 14px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top;font-size:13px;overflow-wrap:anywhere;word-break:break-word}
 th{background:#1a2133;color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 .badge{font-size:11px;font-weight:700;padding:3px 7px;border-radius:999px;border:1px solid transparent}
 .badge.ok{background:#0f2a1a;color:var(--ok);border-color:#1a4a2e}
 .badge.err{background:#3a1320;color:var(--err);border-color:#5a1e2e}
-.errmsg{color:var(--err);font-size:11px;word-break:break-all}
-.mono{font-family:ui-monospace,monospace}
+.errmsg{color:var(--err);font-size:11px;word-break:break-all;overflow-wrap:anywhere}
+.mono{font-family:ui-monospace,monospace;overflow-wrap:anywhere;word-break:break-word}
 footer{max-width:1200px;margin:0 auto;padding:10px 20px 30px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:10px}
 </style>
 </head>

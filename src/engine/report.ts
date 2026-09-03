@@ -82,8 +82,8 @@ export function generateHtmlReport(report: ScanReport): string {
         ? `<div class="shot-tabs" data-vp="${esc(r.viewport.label)}">
             <div class="tab-bar">
               <div role="tablist" aria-label="Screenshot view for ${esc(r.viewport.label)}">
-                <button class="tab active" role="tab" id="${tabIdAnn}" aria-selected="true" aria-controls="${panelIdAnn}" data-tab="annotated">Annotated · ${annCount} marker${annCount === 1 ? "" : "s"}</button>
-                <button class="tab" role="tab" id="${tabIdClean}" aria-selected="false" aria-controls="${panelIdClean}" data-tab="clean">Clean</button>
+                <button class="tab active" role="tab" id="${tabIdAnn}" aria-selected="true" aria-controls="${panelIdAnn}" data-tab="annotated" tabindex="0">Annotated · ${annCount} marker${annCount === 1 ? "" : "s"}</button>
+                <button class="tab" role="tab" id="${tabIdClean}" aria-selected="false" aria-controls="${panelIdClean}" data-tab="clean" tabindex="-1">Clean</button>
               </div>
               <a class="tab-link" href="${esc(annotated)}" target="_blank" rel="noopener" aria-label="Open annotated screenshot for ${esc(r.viewport.label)} in new tab">open ↗</a>
             </div>
@@ -214,8 +214,8 @@ export function generateHtmlReport(report: ScanReport): string {
   .legend-id.error{background:#3a1320;color:var(--err);border-color:#5a1e2e}
   .legend-id.warning{background:#3a2d10;color:var(--warn);border-color:#6a4a10}
   .legend-type{font-weight:600;color:var(--text)}
-  .legend-label{color:var(--muted)}
-  .legend-sel{font-size:10px;background:#0b0e14;border:1px solid var(--border);padding:1px 5px;border-radius:6px}
+  .legend-label{color:var(--muted);max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+  .legend-sel{font-size:10px;background:#0b0e14;border:1px solid var(--border);padding:1px 5px;border-radius:6px;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
   .vp-findings{padding:12px;display:flex;flex-direction:column;gap:10px;max-height:420px;overflow:auto}
   .finding{background:#0f1422;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
   .finding.sev-error{border-left:3px solid var(--err)}
@@ -234,10 +234,10 @@ export function generateHtmlReport(report: ScanReport): string {
   .marker-badge.error{background:var(--err);color:#fff}
   .marker-badge.warning{background:var(--warn);color:#111}
   .marker-hint{font-size:11px;color:var(--muted);margin-top:4px}
-  .msg{margin-top:6px;font-size:13px;color:#d0d6e6}
+  .msg{margin-top:6px;font-size:13px;color:#d0d6e6;overflow-wrap:anywhere;word-break:break-word}
   details{margin-top:8px}
   details summary{font-size:12px;color:var(--muted);cursor:pointer}
-  pre{margin:8px 0 0;background:#080a12;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;overflow:auto;max-height:220px;color:#cbd5e1}
+  pre{margin:8px 0 0;background:#080a12;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;overflow:auto;max-height:220px;color:#cbd5e1;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
   .no-issues{color:var(--muted);font-size:13px}
   .all-findings{display:flex;flex-direction:column;gap:10px}
   .a11y-note{margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(124,92,255,0.12);border:1px solid #2a2a4a;color:#b8b8ff;font-size:11px}
@@ -245,7 +245,7 @@ export function generateHtmlReport(report: ScanReport): string {
   .a11y-help a{color:var(--info);text-decoration:none}
   .a11y-help a:hover{text-decoration:underline}
   footer{max-width:1200px;margin:0 auto;padding:10px 20px 30px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:10px}
-  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, monospace}
+  .mono{font-family: ui-monospace, SFMono-Regular, Menlo, monospace;overflow-wrap:anywhere;word-break:break-word}
 </style>
 </head>
 <body>
