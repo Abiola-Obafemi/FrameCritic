@@ -86,11 +86,15 @@ Policy:
 
 function openInBrowser(filePath: string): void {
   const abs = path.resolve(filePath);
-  const url = abs.startsWith("/") ? `file://${abs}` : `file:///${abs.replace(/\\/g, "/")}`;
+  // Encode file URL correctly for spaces and special chars; keep forward slashes for Windows.
+  const posixAbs = abs.replace(/\\/g, "/");
+  const fileUrl = abs.startsWith("/") ? `file://${encodeURI(abs)}` : `file:///${encodeURI(posixAbs)}`;
   const platform = process.platform;
   let cmd: string;
   let args: string[];
   if (platform === "win32") {
+    // Use cmd /c start "" <path> — spawn will auto-quote abs if it contains spaces,
+    // producing correct `start "" "C:\path with spaces\file.html"`.
     cmd = "cmd";
     args = ["/c", "start", "", abs];
   } else if (platform === "darwin") {
@@ -102,7 +106,7 @@ function openInBrowser(filePath: string): void {
   }
   const child = spawn(cmd, args, { stdio: "ignore", detached: true });
   child.on("error", () => {
-    console.log(`Open manually: ${url}`);
+    console.log(`Open manually: ${fileUrl}`);
   });
   child.unref();
 }

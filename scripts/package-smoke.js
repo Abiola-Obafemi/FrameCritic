@@ -35,9 +35,9 @@ if (!npmignore.includes("src")) throw new Error(".npmignore must exclude src");
 if (!npmignore.includes("demo-app")) throw new Error(".npmignore must exclude demo-app");
 console.log("[smoke] .npmignore OK");
 
-console.log("[smoke] Manual verification steps (run via bash tool):");
-console.log("  1. npm run build && npm pack");
-console.log("  2. tar -tzf framecritic-*.tgz | sort");
+console.log("[smoke] Manual verification steps (Windows PowerShell compatible):");
+console.log("  1. npm run build; if ($?) { npm pack }  (PowerShell)  or  npm run build && npm pack  (bash)");
+console.log("  2. tar -tzf framecritic-*.tgz | sort  (Windows 10+ tar.exe)  or  tar -tzf framecritic-*.tgz | Sort-Object  (PowerShell)");
 console.log("  3. verify no src/tests/NIGHT_SHIFT/demo-app/framecritic-out/.env secrets");
 console.log("  4. install tarball in temp dir outside repo and run: node node_modules/framecritic/dist/cli.js --help");
 console.log("[smoke] PASS (static checks)");

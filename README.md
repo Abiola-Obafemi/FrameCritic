@@ -229,10 +229,19 @@ Out of scope: accounts, billing, cloud storage, AI inference, proxying, multi-te
 
 ```bash
 npm run build   # tsc → dist/
-npm test        # node --test dist/**/*.test.js  (172 tests: CLI, config, policy, compare, scenario, sweep, trace, detectors, annotations, report, a11y, batch, artifact)
+npm test        # node --test dist/**/*.test.js  (179 tests: CLI, config, policy, compare, scenario, sweep, trace, detectors, annotations, report, a11y, batch, artifact, windows-compat)
 npm pack --dry-run  # verify tarball: ~68 files, ~79 kB package, ~343 kB unpacked — no src/tests/demo-app/fixtures/framecritic-out/.env
 node scripts/package-smoke.js  # static packaging checks
 ```
+
+**Windows (PowerShell) notes:**
+- Use PowerShell 5.1 or later (this is a Windows PowerShell audit). All `npm` invocations use `npm.cmd` automatically; do not call `npm` directly via bash.
+- `npm test` uses double-quoted glob `node --test "dist/**/*.test.js"` so PowerShell does not suppress tests (single quotes break on Windows). Verified on Windows with 179 tests.
+- Paths with spaces (e.g. `C:\Users\Abiola Obafemi\...`) are fully supported: `--output`, `--config`, `--scenario`, `--routes`, and `os.tmpdir()` all use `path.join`/`path.resolve` and are covered by `windows-compat.test.ts`.
+- `framecritic scan --open` on Windows uses `cmd /c start "" "<path>"` via `spawn` (auto-quoted), falling back to `file:///C:/...%20...` encoded URL; no `xdg-open`/`open` assumption.
+- `npx playwright install chromium` (without `--with-deps`) is the Windows equivalent; `--with-deps` is Ubuntu-only.
+- `tar -tzf framecritic-*.tgz | sort` works on Windows 10+ (bundled `tar.exe`); PowerShell alternative: `tar -tzf framecritic-*.tgz | Sort-Object`.
+- For the dashboard `docs/github-actions-example.yml`, `npm start &` is bash background on Ubuntu. On Windows PowerShell use a separate terminal or `Start-Process -NoNewWindow npm -ArgumentList 'start'`.
 
 **Project conventions:** `public/` hand-written, `dist/` build output, `framecritic-out/` ignored, `NIGHT_SHIFT.md` historical backlog not shipped. Versioning pre-1.0 (`0.2.0`) — breaking changes without major bump until `1.0.0`.
 

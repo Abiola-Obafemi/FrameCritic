@@ -143,6 +143,8 @@ export async function scanBatch(opts: {
   for (const route of routes) {
     const routeUrl = resolveRouteUrl(opts.baseUrl, route.path);
     const sanitized = sanitizeRouteName(route.name);
+    // Use posix for manifest/HTML relative links (portable forward slashes),
+    // and path.join for filesystem (handles Windows backslashes and spaces).
     const routeOutRel = path.posix.join("routes", sanitized);
     const routeOutAbs = path.join(opts.outDir, routeOutRel);
     await fs.promises.mkdir(routeOutAbs, { recursive: true });

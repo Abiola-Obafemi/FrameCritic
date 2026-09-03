@@ -40,6 +40,9 @@ jobs:
           # Example for a Next.js / Vite / Express app on port 3000:
           npm start &
           # If your app needs a different command, replace the line above.
+          # Windows PowerShell locally: use a separate terminal or
+          # Start-Process -NoNewWindow npm -ArgumentList 'start'
+          # (this workflow runs on ubuntu-latest, so `&` is correct here)
 
       - name: Wait for application
         run: |
