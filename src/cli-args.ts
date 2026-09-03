@@ -178,7 +178,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
     if (a === "--max-warnings") {
       const raw = argv[i + 1];
-      if (!raw || raw.startsWith("-")) throw new Error(`--max-warnings requires a number`);
+      if (raw === undefined) throw new Error(`--max-warnings requires a number`);
+      // Allow negative values to be validated as non-negative integer error (deterministic)
+      // Only reject if raw looks like another option and not a number
+      if (raw.startsWith("-") && !/^-?\d+$/.test(raw)) throw new Error(`--max-warnings requires a number`);
       const n = Number(raw);
       if (!Number.isInteger(n) || n < 0) throw new Error(`--max-warnings must be a non-negative integer (got "${raw}")`);
       maxWarnings = n;

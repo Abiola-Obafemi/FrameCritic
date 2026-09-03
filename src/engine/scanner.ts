@@ -1,4 +1,5 @@
 import { chromium, type Page } from "playwright";
+import fsSync from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { VIEWPORTS, type ScanReport, type Finding, type ViewportResult, type AnnotationBox, type PolicyOptions, ARTIFACT_VERSION, type Manifest } from "../types.js";
@@ -24,10 +25,11 @@ export type ScanOptions = {
 
 function normalizeUrl(input: string): string {
   let u = input.trim();
-  if (!u) throw new Error(`Invalid URL "${input}": empty URL`);
+  const redactedInput = redactUrl(input);
+  if (!u) throw new Error(`Invalid URL "${redactedInput}": empty URL`);
   // If input contains "://" but not http(s), treat as invalid
   if (u.includes("://") && !/^https?:\/\//i.test(u)) {
-    throw new Error(`Invalid URL "${input}": unsupported protocol`);
+    throw new Error(`Invalid URL "${redactedInput}": unsupported protocol`);
   }
   if (!/^https?:\/\//i.test(u)) u = "http://" + u;
   // Validate URL
@@ -35,19 +37,25 @@ function normalizeUrl(input: string): string {
     const parsed = new URL(u);
     if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(`Unsupported protocol ${parsed.protocol}`);
   } catch (e: any) {
-    throw new Error(`Invalid URL "${input}": ${e.message}`);
+    throw new Error(`Invalid URL "${redactedInput}": ${e.message}`);
   }
   return u;
 }
 
-// Validate output path is safe
+// Validate output path is safe — deterministic, non-secret-leaking
 function assertSafeOutDir(outDir: string): void {
-  const normalized = path.normalize(outDir);
-  if (normalized.includes("..") && path.resolve(normalized) !== path.resolve(outDir)) {
-    // Allow absolute paths but block traversal outside cwd for relative
-    // For now just ensure no null bytes or traversal tricks
-  }
   if (outDir.includes("\0")) throw new Error(`Invalid output path`);
+  // Output collision: outDir exists as a file (not directory) → concise deterministic error
+  try {
+    if (fsSync.existsSync(outDir) && !fsSync.statSync(outDir).isDirectory()) {
+      throw new Error(`Output directory collision: "${outDir}" exists and is not a directory`);
+    }
+  } catch (e: any) {
+    if (e.message.startsWith("Output directory collision")) throw e;
+    // ignore stat errors (e.g., permission) — mkdir will surface them deterministically
+  }
+  // Existing directory is reused deterministically (artifacts overwritten, not merged ambiguously).
+  // This is documented behavior: re-running with same --output overwrites findings.json/report.html.
 }
 
 function buildAnnotationBoxes(findings: Finding[]): { boxes: AnnotationBox[] } {

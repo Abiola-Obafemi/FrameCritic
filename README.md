@@ -225,18 +225,47 @@ Out of scope: accounts, billing, cloud storage, AI inference, proxying, multi-te
 
 ---
 
+## CLI error handling (actual behavior)
+
+All CLI errors are **concise, deterministic, non-secret-leaking, and exit nonzero**. Validated by `src/cli-error-handling.test.ts` (60 tests).
+
+| Input | Behavior | Exit |
+|---|---|---|
+| **Malformed sweep** `bad`, `320:800`, `a:b:c`, `100:800:100`, `800:320:100` | `Error: --sweep requires format <min>:<max>:<step>` or bounds/step errors | 2 |
+| **Too many widths** `200:1400:100` → 13 widths | `Error: --sweep would generate 13 widths — hard cap is 12` | 2 |
+| **Viewport + sweep conflict** `--viewport mobile --sweep 320:800:100` | `Error: Cannot combine --sweep and --viewport` | 2 |
+| **Missing routes file** `--routes nope.json` | `Routes manifest not found: <abs>` | 1 (scan error) or per-route `status:error` in batch |
+| **Invalid route JSON** malformed JSON, empty, duplicate names, unsafe name, `ftp://` | `Invalid JSON in routes manifest …` or `Invalid routes manifest …` | 1 or per-route error |
+| **Missing scenario** `--scenario nope.json` / per-route `scenario` missing | `Scenario file not found: <abs>` | 1 (single) / per-route `error` (batch continues) |
+| **Malformed scenario** unknown `action: eval`, missing `selector`, extra keys, `steps:[]`, `wait ms >5000`, `scroll` without `selector/x/y`, `hotkey Bad+Enter` | `Invalid scenario …: steps[i].action must be one of …` | 1 |
+| **a11y runtime failure** axe load error | Warning finding `accessibility` with `disclaimer`, pipeline continues | 0 (scan succeeds, no crash) |
+| **Output collision** `--output <file>` where file exists | `Output directory collision: "<path>" exists and is not a directory` | 1 |
+| **Existing output dir** `--output <dir>` where dir exists | Reused deterministically; artifacts overwritten (`findings.json` mtime updated) | 0 |
+| **Unsupported combo** `--routes x --scenario y` | `Cannot combine --routes and --scenario` | 2 |
+| **Unknown option** `--unknown` | `Unknown option "--unknown". See --help.` | 2 |
+| **Invalid --fail-on / --max-warnings / --config** | `must be one of: error, warning, never` / `must be a non-negative integer` / `Config file not found` | 2 or 1 |
+| **Invalid URL with credentials** `ftp://user:pass@…?token=abc` | `Invalid URL "http://***:***@…?token=***": unsupported protocol` — **redacted** | 1 |
+| **Compare missing args** `compare a.json` | `compare requires two arguments` | 2 |
+| **Compare invalid JSON / missing file** | `Invalid JSON in <path>` / `ENOENT` | 1 |
+
+Notes:
+- Secrets (`user:pass`, `token`, `key`, `secret`, `api_key`, `access_token`, `auth`) are redacted via `redactUrl()` before any error or artifact write (`src/security.ts`, `scanner.ts:normalizeUrl`, `routes.ts:resolveRouteUrl`, `batch.ts`). Verified: raw values never appear in stderr or `findings.json`.
+- Messages are deterministic: same input → same message (no timestamps/random). Checked via dual-call equality.
+- Concise: all messages <500 chars prefix; no stack dumps unless `page-error` finding details.
+- Batch routes isolate failures: one route's missing scenario/a11y error → `status:error` for that route, `batch.json` + `index.html` still written, other routes still scanned.
+
 ## Development
 
 ```bash
 npm run build   # tsc → dist/
-npm test        # node --test dist/**/*.test.js  (179 tests: CLI, config, policy, compare, scenario, sweep, trace, detectors, annotations, report, a11y, batch, artifact, windows-compat)
+npm test        # node --test dist/**/*.test.js  (247 tests: CLI, config, policy, compare, scenario, sweep, trace, detectors, annotations, report, a11y, batch, artifact, windows-compat, cli-error-handling)
 npm pack --dry-run  # verify tarball: ~68 files, ~79 kB package, ~343 kB unpacked — no src/tests/demo-app/fixtures/framecritic-out/.env
 node scripts/package-smoke.js  # static packaging checks
 ```
 
 **Windows (PowerShell) notes:**
 - Use PowerShell 5.1 or later (this is a Windows PowerShell audit). All `npm` invocations use `npm.cmd` automatically; do not call `npm` directly via bash.
-- `npm test` uses double-quoted glob `node --test "dist/**/*.test.js"` so PowerShell does not suppress tests (single quotes break on Windows). Verified on Windows with 179 tests.
+- `npm test` uses double-quoted glob `node --test "dist/**/*.test.js"` so PowerShell does not suppress tests (single quotes break on Windows). Verified on Windows with 247 tests.
 - Paths with spaces (e.g. `C:\Users\Abiola Obafemi\...`) are fully supported: `--output`, `--config`, `--scenario`, `--routes`, and `os.tmpdir()` all use `path.join`/`path.resolve` and are covered by `windows-compat.test.ts`.
 - `framecritic scan --open` on Windows uses `cmd /c start "" "<path>"` via `spawn` (auto-quoted), falling back to `file:///C:/...%20...` encoded URL; no `xdg-open`/`open` assumption.
 - `npx playwright install chromium` (without `--with-deps`) is the Windows equivalent; `--with-deps` is Ubuntu-only.

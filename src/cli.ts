@@ -263,7 +263,7 @@ if (isMain) {
     process.exit(1);
   }
 
-  if (!/^https?:\/\//i.test(url)) url = "http://" + url;
+  if (!url.includes("://")) url = "http://" + url;
 
   const outDir = parsed.output ?? path.join(process.cwd(), "framecritic-out", `scan-${Date.now()}`);
 

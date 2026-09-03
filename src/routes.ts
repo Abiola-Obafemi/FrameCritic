@@ -89,12 +89,14 @@ export function loadRoutesManifest(filePath: string): RouteEntry[] {
 }
 
 export function resolveRouteUrl(baseUrl: string, routePath: string): string {
+  const redactedBase = redactUrl(baseUrl);
+  const redactedPath = redactUrl(routePath);
   // baseUrl must be already normalized valid http(s)
   try {
     const base = new URL(baseUrl);
     if (!["http:", "https:"].includes(base.protocol)) throw new Error(`Unsupported protocol ${base.protocol}`);
   } catch (e: any) {
-    throw new Error(`Invalid base URL "${baseUrl}": ${e.message}`);
+    throw new Error(`Invalid base URL "${redactedBase}": ${e.message}`);
   }
   // If routePath is absolute URL with protocol, validate protocol and return redacted? But we return full URL
   if (routePath.includes("://")) {
@@ -103,7 +105,7 @@ export function resolveRouteUrl(baseUrl: string, routePath: string): string {
       if (!["http:", "https:"].includes(u.protocol)) throw new Error(`Unsupported protocol ${u.protocol}`);
       return redactUrl(u.toString());
     } catch (e: any) {
-      throw new Error(`Invalid route path URL "${routePath}": ${e.message}`);
+      throw new Error(`Invalid route path URL "${redactedPath}": ${e.message}`);
     }
   }
   // Relative path: resolve against base
@@ -112,7 +114,7 @@ export function resolveRouteUrl(baseUrl: string, routePath: string): string {
     // redact after resolve? but we keep full for scanning but redact for artifacts
     return redactUrl(resolved);
   } catch (e: any) {
-    throw new Error(`Failed to resolve route path "${routePath}" against base "${baseUrl}": ${e.message}`);
+    throw new Error(`Failed to resolve route path "${redactedPath}" against base "${redactedBase}": ${e.message}`);
   }
 }
 

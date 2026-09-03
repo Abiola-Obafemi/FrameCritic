@@ -131,14 +131,22 @@ export async function scanBatch(opts: {
   const baseUrlRedacted = redactUrl(opts.baseUrl);
   const timestamp = new Date().toISOString();
   const routes = loadRoutesManifest(opts.routesManifestPath);
-  // validate baseUrl
+  // validate baseUrl — redact secrets deterministically
   try {
     const u = new URL(opts.baseUrl);
     if (!["http:", "https:"].includes(u.protocol)) throw new Error(`Unsupported protocol ${u.protocol}`);
   } catch (e: any) {
-    throw new Error(`Invalid base URL "${opts.baseUrl}": ${e.message}`);
+    throw new Error(`Invalid base URL "${baseUrlRedacted}": ${e.message}`);
   }
 
+  // Output collision: deterministic error if outDir exists as file
+  try {
+    if (fs.existsSync(opts.outDir) && !fs.statSync(opts.outDir).isDirectory()) {
+      throw new Error(`Output directory collision: "${opts.outDir}" exists and is not a directory`);
+    }
+  } catch (e: any) {
+    if (e.message.startsWith("Output directory collision")) throw e;
+  }
   await fs.promises.mkdir(opts.outDir, { recursive: true });
   await fs.promises.mkdir(path.join(opts.outDir, "routes"), { recursive: true });
 
