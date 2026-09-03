@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import type { Page } from "playwright";
 import type { Finding } from "../types.js";
 import { redactUrl } from "../security.js";
@@ -18,18 +19,33 @@ function safeString(v: unknown, max = 500): string {
 }
 
 function getAxePathSync(): string {
+  // 1. Node module resolution (handles pnpm, hoisting, nested installs)
+  try {
+    const require = createRequire(import.meta.url);
+    const resolved = require.resolve("axe-core/axe.min.js");
+    if (fs.existsSync(resolved)) return resolved;
+  } catch {}
+  // 2. Direct filesystem candidates
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
+    // sibling when installed: node_modules/framecritic/dist/engine -> node_modules/axe-core
+    path.resolve(thisDir, "../../../axe-core/axe.min.js"),
+    // cwd-based (common when running from project root)
     path.resolve(process.cwd(), "node_modules/axe-core/axe.min.js"),
-    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../node_modules/axe-core/axe.min.js"),
+    // legacy dev fallback
+    path.resolve(thisDir, "../../node_modules/axe-core/axe.min.js"),
   ];
   for (const c of candidates) if (fs.existsSync(c)) return c;
-  // try to use Node's module resolution via import
-  // last resort: search upwards
-  let cur = process.cwd();
-  for (let i = 0; i < 5; i++) {
-    const p = path.join(cur, "node_modules/axe-core/axe.min.js");
-    if (fs.existsSync(p)) return p;
-    cur = path.dirname(cur);
+  // 3. Search upwards from both this file and cwd (covers global installs, custom layouts)
+  for (const base of [thisDir, process.cwd()]) {
+    let cur = base;
+    for (let i = 0; i < 8; i++) {
+      const p = path.join(cur, "node_modules/axe-core/axe.min.js");
+      if (fs.existsSync(p)) return p;
+      const parent = path.dirname(cur);
+      if (parent === cur) break;
+      cur = parent;
+    }
   }
   throw new Error("axe-core axe.min.js not found");
 }
