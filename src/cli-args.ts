@@ -53,22 +53,13 @@ export function parseSweep(raw: string): Viewport[] {
   if (min > max) {
     throw new Error(`--sweep min must be <= max (got "${raw}")`);
   }
-  const widths: number[] = [];
-  for (let w = min; w <= max; w += step) {
-    widths.push(w);
-    if (widths.length > SWEEP_MAX_WIDTHS) break;
-  }
-  if (widths.length > SWEEP_MAX_WIDTHS) {
-    throw new Error(`--sweep would generate ${widths.length} widths — hard cap is ${SWEEP_MAX_WIDTHS} (got "${raw}"). Increase step or reduce range.`);
-  }
-  if (widths.length === 0) throw new Error(`--sweep produced no widths (got "${raw}")`);
-  // Defensive: if loop stopped early due to cap, also error with count?
-  // Already handled >12 case. For exactly 12 it's allowed, but we already checked.
-  // Re-check total that would have been generated without cap to give precise error.
   const totalWouldBe = Math.floor((max - min) / step) + 1;
   if (totalWouldBe > SWEEP_MAX_WIDTHS) {
     throw new Error(`--sweep would generate ${totalWouldBe} widths — hard cap is ${SWEEP_MAX_WIDTHS} (got "${raw}"). Increase step or reduce range.`);
   }
+  const widths: number[] = [];
+  for (let w = min; w <= max; w += step) widths.push(w);
+  if (widths.length === 0) throw new Error(`--sweep produced no widths (got "${raw}")`);
   return widths.map((w) => ({ label: `sweep-${w}`, width: w, height: SWEEP_HEIGHT }));
 }
 

@@ -1,4 +1,5 @@
 import type { ScanReport, Finding } from "../types.js";
+import { ARTIFACT_VERSION } from "../types.js";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -250,7 +251,7 @@ export function generateHtmlReport(report: ScanReport): string {
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
 <header role="banner">
-  <div class="brand" aria-label="FrameCritic version 0.1">◐ <span>FrameCritic</span> v0.1 — Visual QA Report</div>
+  <div class="brand" aria-label="FrameCritic version ${esc(ARTIFACT_VERSION)}">◐ <span>FrameCritic</span> v${esc(ARTIFACT_VERSION)} — Visual QA Report</div>
   <h1>${esc(statusText)}</h1>
   <div class="meta">Target: <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a> · <span class="mono">${esc(timestamp)}</span> · Viewports: ${report.viewports.map((v) => `${esc(v.label)} ${v.width}×${v.height}`).join(" · ")}</div>
   <div class="summary">
@@ -309,7 +310,7 @@ export function generateHtmlReport(report: ScanReport): string {
   </div>
 </main>
 <footer role="contentinfo">
-  Generated locally by FrameCritic v0.1 — no cloud, no AI. Artifacts: <span class="mono">screenshots/*.png</span> + <span class="mono">*-annotated.png</span>, <span class="mono">findings.json</span>, <span class="mono">report.html</span>, <span class="mono">AGENT_FIXES.md</span> — markers link findings to annotated regions.
+  Generated locally by FrameCritic v${esc(ARTIFACT_VERSION)} — no cloud, no AI. Artifacts: <span class="mono">screenshots/*.png</span> + <span class="mono">*-annotated.png</span>, <span class="mono">findings.json</span>, <span class="mono">report.html</span>, <span class="mono">AGENT_FIXES.md</span> — markers link findings to annotated regions.
 </footer>
 <script>
 (function(){
