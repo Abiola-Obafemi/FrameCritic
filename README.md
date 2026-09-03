@@ -258,14 +258,14 @@ Notes:
 
 ```bash
 npm run build   # tsc → dist/
-npm test        # node --test dist/**/*.test.js  (247 tests: CLI, config, policy, compare, scenario, sweep, trace, detectors, annotations, report, a11y, batch, artifact, windows-compat, cli-error-handling)
-npm pack --dry-run  # verify tarball: ~68 files, ~79 kB package, ~343 kB unpacked — no src/tests/demo-app/fixtures/framecritic-out/.env
+npm test        # node --test dist/**/*.test.js  (281 tests: CLI, config, policy, compare, scenario, sweep, trace, detectors, annotations, report, a11y, batch, artifact, windows-compat, cli-error-handling, security-bounds, regression-dogfood, report-accessibility)
+npm pack --dry-run  # verify tarball: ~68 files, ~86 kB package, ~371 kB unpacked — no src/tests/demo-app/fixtures/framecritic-out/.env
 node scripts/package-smoke.js  # static packaging checks
 ```
 
 **Windows (PowerShell) notes:**
 - Use PowerShell 5.1 or later (this is a Windows PowerShell audit). All `npm` invocations use `npm.cmd` automatically; do not call `npm` directly via bash.
-- `npm test` uses double-quoted glob `node --test "dist/**/*.test.js"` so PowerShell does not suppress tests (single quotes break on Windows). Verified on Windows with 247 tests.
+- `npm test` uses double-quoted glob `node --test "dist/**/*.test.js"` so PowerShell does not suppress tests (single quotes break on Windows). Verified on Windows with 281 tests.
 - Paths with spaces (e.g. `C:\Users\Abiola Obafemi\...`) are fully supported: `--output`, `--config`, `--scenario`, `--routes`, and `os.tmpdir()` all use `path.join`/`path.resolve` and are covered by `windows-compat.test.ts`.
 - `framecritic scan --open` on Windows uses `cmd /c start "" "<path>"` via `spawn` (auto-quoted), falling back to `file:///C:/...%20...` encoded URL; no `xdg-open`/`open` assumption.
 - `npx playwright install chromium` (without `--with-deps`) is the Windows equivalent; `--with-deps` is Ubuntu-only.
