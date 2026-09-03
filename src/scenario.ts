@@ -19,6 +19,9 @@ export type Scenario = {
 };
 
 const VALID_ACTIONS = new Set(["click", "fill", "hover", "press", "wait", "scroll", "select", "hotkey"]);
+const MAX_JSON_BYTES = 256 * 1024;
+const MAX_SELECTOR_LEN = 500;
+const MAX_VALUE_LEN = 1000;
 
 export function validateScenario(raw: unknown, sourcePath: string): Scenario {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
@@ -54,17 +57,22 @@ export function validateScenario(raw: unknown, sourcePath: string): Scenario {
     }
     if (action === "click") {
       if (typeof step.selector !== "string" || !step.selector.trim()) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] click requires non-empty "selector"`);
+      if (String(step.selector).trim().length > MAX_SELECTOR_LEN) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] click "selector" must be <=${MAX_SELECTOR_LEN} chars`);
       validated.push({ action: "click", selector: String(step.selector).trim() });
     } else if (action === "fill") {
       if (typeof step.selector !== "string" || !step.selector.trim()) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] fill requires "selector"`);
+      if (String(step.selector).trim().length > MAX_SELECTOR_LEN) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] fill "selector" must be <=${MAX_SELECTOR_LEN} chars`);
       if (typeof step.value !== "string") throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] fill requires "value" string`);
+      if (String(step.value).length > MAX_VALUE_LEN) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] fill "value" must be <=${MAX_VALUE_LEN} chars`);
       validated.push({ action: "fill", selector: String(step.selector).trim(), value: String(step.value) });
     } else if (action === "hover") {
       if (typeof step.selector !== "string" || !step.selector.trim()) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] hover requires "selector"`);
+      if (String(step.selector).trim().length > MAX_SELECTOR_LEN) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] hover "selector" must be <=${MAX_SELECTOR_LEN} chars`);
       validated.push({ action: "hover", selector: String(step.selector).trim() });
     } else if (action === "press") {
       if (typeof step.key !== "string" || !step.key.trim()) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] press requires "key" (e.g. Enter, Escape, ArrowDown)`);
       const sel = typeof step.selector === "string" && step.selector.trim() ? String(step.selector).trim() : undefined;
+      if (sel && sel.length > MAX_SELECTOR_LEN) throw new Error(`Invalid scenario ${sourcePath}: steps[${i}] press "selector" must be <=${MAX_SELECTOR_LEN} chars`);
       validated.push({ action: "press", selector: sel, key: String(step.key).trim() });
     } else if (action === "wait") {
       if (step.ms === undefined || typeof step.ms !== "number" || !Number.isFinite(step.ms) || step.ms < 0 || step.ms > 5000) {
@@ -138,12 +146,19 @@ export function validateScenario(raw: unknown, sourcePath: string): Scenario {
 export function loadScenario(filePath: string): Scenario {
   const abs = path.resolve(filePath);
   if (!fs.existsSync(abs)) throw new Error(`Scenario file not found: ${abs}`);
+  try {
+    const st = fs.statSync(abs);
+    if (st.size > MAX_JSON_BYTES) throw new Error(`Scenario file ${abs} exceeds ${MAX_JSON_BYTES} bytes (got ${st.size}) — file too large`);
+  } catch (e: any) {
+    if (e.message.includes("exceeds")) throw e;
+  }
   let rawText: string;
   try {
     rawText = fs.readFileSync(abs, "utf-8");
   } catch (e: any) {
     throw new Error(`Failed to read scenario ${abs}: ${e.message}`);
   }
+  if (rawText.length > MAX_JSON_BYTES) throw new Error(`Scenario file ${abs} exceeds ${MAX_JSON_BYTES} bytes (got ${rawText.length}) — file too large`);
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawText);

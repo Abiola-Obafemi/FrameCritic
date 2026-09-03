@@ -30,3 +30,11 @@ export function isSensitiveHeader(name: string): boolean {
   const lower = name.toLowerCase();
   return ["authorization", "cookie", "set-cookie", "x-api-key", "x-auth-token"].includes(lower);
 }
+
+export function redactSecrets(text: string): string {
+  // Redact credentials embedded anywhere in text, not just isolated URLs
+  // Handles user:pass@ and sensitive query params inside longer strings
+  return text
+    .replace(/\/\/[^@\/\s]+:[^@\/\s]+@/g, "//***:***@")
+    .replace(/([?&](token|key|secret|password|auth|access_token|api_key)=)[^&\s"'`]+/gi, "$1***");
+}

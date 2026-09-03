@@ -1,4 +1,5 @@
 import type { ScanReport, Finding, ViewportResult } from "../types.js";
+import { redactUrl, redactSecrets } from "../security.js";
 
 function findingSelectors(f: Finding): string[] {
   const d: any = f.details ?? {};
@@ -42,7 +43,8 @@ function suggestionFor(f: Finding): string {
     case "broken-image": {
       const img = (d.images ?? [])[0];
       if (!img) return "Broken image detected. Verify that the image source exists and returns 200. Add or correct alt text as needed.";
-      return `Image failed to load: src="${img.src}" alt="${img.alt ?? ""}" at ${img.selector}. Verify file exists, path is correct, server returns 200, and network allows the request. Consider placeholder or error handling.`;
+      const safeSrc = typeof img.src === "string" ? redactSecrets(redactUrl(img.src)) : img.src;
+      return `Image failed to load: src="${safeSrc}" alt="${img.alt ?? ""}" at ${img.selector}. Verify file exists, path is correct, server returns 200, and network allows the request. Consider placeholder or error handling.`;
     }
     case "console-error": {
       const txt = d.text ?? f.message;

@@ -157,7 +157,8 @@ export async function scanBatch(opts: {
   let aggTotal = 0;
 
   for (const route of routes) {
-    const routeUrl = resolveRouteUrl(opts.baseUrl, route.path);
+    const routeUrlRaw = resolveRouteUrl(opts.baseUrl, route.path);
+    const routeUrl = redactUrl(routeUrlRaw);
     const sanitized = sanitizeRouteName(route.name);
     // Use posix for manifest/HTML relative links (portable forward slashes),
     // and path.join for filesystem (handles Windows backslashes and spaces).
@@ -178,7 +179,7 @@ export async function scanBatch(opts: {
 
     try {
       const report = await scanUrl({
-        url: routeUrl,
+        url: routeUrlRaw,
         outDir: routeOutAbs,
         viewports: opts.viewports as any,
         configPath: opts.configPath,

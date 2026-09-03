@@ -25,6 +25,10 @@ const KNOWN_TYPES: Finding["type"][] = [
 ];
 
 const VIEWPORT_KEYS = ["mobile", "tablet", "desktop"] as const;
+const MAX_JSON_BYTES = 256 * 1024;
+const MAX_SELECTOR_LEN = 500;
+const MAX_IGNORE_SELECTORS = 100;
+const MAX_IGNORE_TYPES = 20;
 
 export type ConfigLoadResult = {
   config: FramecriticConfig;
@@ -64,15 +68,18 @@ export function validateConfig(raw: unknown, sourcePath: string): FramecriticCon
 
     if (selectors !== undefined) {
       if (!Array.isArray(selectors)) throw new Error(`Invalid config ${sourcePath}: ignore.selectors must be an array of strings`);
+      if (selectors.length > MAX_IGNORE_SELECTORS) throw new Error(`Invalid config ${sourcePath}: ignore.selectors cannot exceed ${MAX_IGNORE_SELECTORS} entries`);
       outSelectors = [];
       for (let i = 0; i < selectors.length; i++) {
         const s = selectors[i];
         if (typeof s !== "string" || !s.trim()) throw new Error(`Invalid config ${sourcePath}: ignore.selectors[${i}] must be a non-empty string`);
+        if (s.trim().length > MAX_SELECTOR_LEN) throw new Error(`Invalid config ${sourcePath}: ignore.selectors[${i}] must be <=${MAX_SELECTOR_LEN} chars`);
         outSelectors.push(s.trim());
       }
     }
     if (types !== undefined) {
       if (!Array.isArray(types)) throw new Error(`Invalid config ${sourcePath}: ignore.types must be an array of strings`);
+      if (types.length > MAX_IGNORE_TYPES) throw new Error(`Invalid config ${sourcePath}: ignore.types cannot exceed ${MAX_IGNORE_TYPES} entries`);
       outTypes = [];
       for (let i = 0; i < types.length; i++) {
         const t = types[i];
@@ -96,10 +103,12 @@ export function validateConfig(raw: unknown, sourcePath: string): FramecriticCon
         }
         const arr = vpObj[k];
         if (!Array.isArray(arr)) throw new Error(`Invalid config ${sourcePath}: ignore.viewports.${k} must be an array of strings`);
+        if (arr.length > MAX_IGNORE_SELECTORS) throw new Error(`Invalid config ${sourcePath}: ignore.viewports.${k} cannot exceed ${MAX_IGNORE_SELECTORS} entries`);
         const list: string[] = [];
         for (let i = 0; i < arr.length; i++) {
           const s = arr[i];
           if (typeof s !== "string" || !s.trim()) throw new Error(`Invalid config ${sourcePath}: ignore.viewports.${k}[${i}] must be a non-empty string`);
+          if (s.trim().length > MAX_SELECTOR_LEN) throw new Error(`Invalid config ${sourcePath}: ignore.viewports.${k}[${i}] must be <=${MAX_SELECTOR_LEN} chars`);
           list.push(s.trim());
         }
         outViewports[k] = list;
@@ -114,6 +123,15 @@ export function validateConfig(raw: unknown, sourcePath: string): FramecriticCon
   return ignore ? { ignore } : {};
 }
 
+function assertConfigSize(filePath: string): void {
+  try {
+    const st = fs.statSync(filePath);
+    if (st.size > MAX_JSON_BYTES) throw new Error(`Config file ${filePath} exceeds ${MAX_JSON_BYTES} bytes (got ${st.size}) — file too large`);
+  } catch (e: any) {
+    if (e.message.includes("exceeds")) throw e;
+  }
+}
+
 export function loadConfig(opts: { explicitPath?: string; cwd?: string }): ConfigLoadResult {
   const cwd = opts.cwd ?? process.cwd();
   if (opts.explicitPath) {
@@ -121,12 +139,14 @@ export function loadConfig(opts: { explicitPath?: string; cwd?: string }): Confi
     if (!fs.existsSync(p)) {
       throw new Error(`Config file not found: ${p} (specified via --config)`);
     }
+    assertConfigSize(p);
     let rawText: string;
     try {
       rawText = fs.readFileSync(p, "utf-8");
     } catch (e: any) {
       throw new Error(`Failed to read config ${p}: ${e.message}`);
     }
+    if (rawText.length > MAX_JSON_BYTES) throw new Error(`Config file ${p} exceeds ${MAX_JSON_BYTES} bytes (got ${rawText.length}) — file too large`);
     let parsed: unknown;
     try {
       parsed = JSON.parse(rawText);
@@ -141,12 +161,14 @@ export function loadConfig(opts: { explicitPath?: string; cwd?: string }): Confi
   if (!fs.existsSync(autoPath)) {
     return { config: {}, path: null };
   }
+  assertConfigSize(autoPath);
   let rawText: string;
   try {
     rawText = fs.readFileSync(autoPath, "utf-8");
   } catch (e: any) {
     throw new Error(`Failed to read config ${autoPath}: ${e.message}`);
   }
+  if (rawText.length > MAX_JSON_BYTES) throw new Error(`Config file ${autoPath} exceeds ${MAX_JSON_BYTES} bytes (got ${rawText.length}) — file too large`);
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawText);

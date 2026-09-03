@@ -82,8 +82,17 @@ export type CompareResult = {
   persisting: Array<{ fingerprint: string; baseline: FingerprintedFinding; current: FingerprintedFinding }>;
 };
 
+const MAX_COMPARE_BYTES = 5 * 1024 * 1024;
+
 function loadReport(filePath: string): ScanReport {
+  try {
+    const st = fs.statSync(filePath);
+    if (st.size > MAX_COMPARE_BYTES) throw new Error(`Findings file ${filePath} exceeds ${MAX_COMPARE_BYTES} bytes (got ${st.size}) — file too large`);
+  } catch (e: any) {
+    if (e.message.includes("exceeds")) throw e;
+  }
   const raw = fs.readFileSync(filePath, "utf-8");
+  if (raw.length > MAX_COMPARE_BYTES) throw new Error(`Findings file ${filePath} exceeds ${MAX_COMPARE_BYTES} bytes (got ${raw.length}) — file too large`);
   let parsed: any;
   try {
     parsed = JSON.parse(raw);

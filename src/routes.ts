@@ -54,6 +54,7 @@ export function validateRoutesManifest(raw: unknown, sourcePath: string): RouteE
     const trimmedPath = p.trim();
     if (trimmedPath.length > 500) throw new Error(`Invalid routes manifest ${sourcePath}: routes[${i}].path must be <=500 chars`);
     if (trimmedPath.includes("\0") || trimmedPath.includes("\\")) throw new Error(`Invalid routes manifest ${sourcePath}: routes[${i}].path contains invalid characters`);
+    if (trimmedPath.startsWith("//")) throw new Error(`Invalid routes manifest ${sourcePath}: routes[${i}].path must not be protocol-relative (starts with //)`);
     // Check unsupported protocol if it looks like absolute URL
     if (trimmedPath.includes("://")) {
       try {
@@ -68,6 +69,10 @@ export function validateRoutesManifest(raw: unknown, sourcePath: string): RouteE
       if (typeof scenario !== "string" || !scenario.trim()) throw new Error(`Invalid routes manifest ${sourcePath}: routes[${i}].scenario must be a non-empty string if present`);
       if (scenario.trim().length > 500) throw new Error(`Invalid routes manifest ${sourcePath}: routes[${i}].scenario must be <=500 chars`);
       if (scenario.trim().includes("\0")) throw new Error(`Invalid routes manifest ${sourcePath}: routes[${i}].scenario contains null byte`);
+      const scenTrim = scenario.trim();
+      // Prevent filesystem traversal via scenario path — reject .. segments
+      if (scenTrim.split(/[\\/]/).includes("..")) throw new Error(`Invalid routes manifest ${sourcePath}: routes[${i}].scenario must not contain ".."`);
+      if (scenTrim.includes("\0")) throw new Error(`Invalid routes manifest ${sourcePath}: routes[${i}].scenario contains invalid characters`);
       // scenario existence will be validated at scan time via loadScenario, but we can check file existence here optionally
       // we don't throw here for missing file to allow batch scan to report per-route error instead of manifest validation failure
     }
@@ -78,11 +83,24 @@ export function validateRoutesManifest(raw: unknown, sourcePath: string): RouteE
   return validated;
 }
 
+const MAX_JSON_BYTES = 256 * 1024;
+
+function assertJsonSize(abs: string): void {
+  try {
+    const st = fs.statSync(abs);
+    if (st.size > MAX_JSON_BYTES) throw new Error(`Routes manifest ${abs} exceeds ${MAX_JSON_BYTES} bytes (got ${st.size}) — file too large`);
+  } catch (e: any) {
+    if (e.message.includes("exceeds")) throw e;
+  }
+}
+
 export function loadRoutesManifest(filePath: string): RouteEntry[] {
   const abs = path.resolve(filePath);
   if (!fs.existsSync(abs)) throw new Error(`Routes manifest not found: ${abs}`);
+  assertJsonSize(abs);
   let rawText: string;
   try { rawText = fs.readFileSync(abs, "utf-8"); } catch (e: any) { throw new Error(`Failed to read routes manifest ${abs}: ${e.message}`); }
+  if (rawText.length > MAX_JSON_BYTES) throw new Error(`Routes manifest ${abs} exceeds ${MAX_JSON_BYTES} bytes (got ${rawText.length}) — file too large`);
   let parsed: unknown;
   try { parsed = JSON.parse(rawText); } catch (e: any) { throw new Error(`Invalid JSON in routes manifest ${abs}: ${e.message}`); }
   return validateRoutesManifest(parsed, abs);
@@ -98,21 +116,24 @@ export function resolveRouteUrl(baseUrl: string, routePath: string): string {
   } catch (e: any) {
     throw new Error(`Invalid base URL "${redactedBase}": ${e.message}`);
   }
-  // If routePath is absolute URL with protocol, validate protocol and return redacted? But we return full URL
+  // Block protocol-relative URLs (//evil.com) — would inherit base protocol and enable SSRF
+  if (routePath.startsWith("//") || routePath.startsWith("\\\\")) {
+    throw new Error(`Invalid route path URL "${redactedPath}": protocol-relative URLs are not allowed`);
+  }
+  // If routePath is absolute URL with protocol, validate protocol and return raw URL (caller redacts for artifacts)
   if (routePath.includes("://")) {
     try {
       const u = new URL(routePath);
       if (!["http:", "https:"].includes(u.protocol)) throw new Error(`Unsupported protocol ${u.protocol}`);
-      return redactUrl(u.toString());
+      return u.toString();
     } catch (e: any) {
       throw new Error(`Invalid route path URL "${redactedPath}": ${e.message}`);
     }
   }
-  // Relative path: resolve against base
+  // Relative path: resolve against base — return raw URL for navigation, caller redacts for storage
   try {
     const resolved = new URL(routePath, baseUrl).toString();
-    // redact after resolve? but we keep full for scanning but redact for artifacts
-    return redactUrl(resolved);
+    return resolved;
   } catch (e: any) {
     throw new Error(`Failed to resolve route path "${redactedPath}" against base "${redactedBase}": ${e.message}`);
   }

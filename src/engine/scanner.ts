@@ -9,7 +9,7 @@ import { generateAgentFixesMarkdown } from "./agentFixes.js";
 import { loadConfig, applyIgnoreRules } from "../config.js";
 import { evaluatePolicy } from "../policy.js";
 import { loadScenario, executeScenario } from "../scenario.js";
-import { redactUrl } from "../security.js";
+import { redactUrl, redactSecrets } from "../security.js";
 import { collectA11yFindings } from "./a11y.js";
 
 export type ScanOptions = {
@@ -56,6 +56,35 @@ function assertSafeOutDir(outDir: string): void {
   }
   // Existing directory is reused deterministically (artifacts overwritten, not merged ambiguously).
   // This is documented behavior: re-running with same --output overwrites findings.json/report.html.
+}
+
+function sanitizeFinding(f: Finding): Finding {
+  // Redact secrets from message and details shallowly — preserves determinism, prevents credential leakage
+  const msg = typeof f.message === "string" ? redactSecrets(redactUrl(f.message)) : f.message;
+  let details: Record<string, unknown> | undefined = f.details as any;
+  if (details) {
+    const copy: Record<string, unknown> = { ...details };
+    // redact common url-like string fields
+    for (const k of ["url", "src", "text", "location", "stack", "error", "message"]) {
+      const v = (copy as any)[k];
+      if (typeof v === "string") (copy as any)[k] = redactSecrets(redactUrl(v));
+      else if (v && typeof v === "object") {
+        // for location objects, redact url field
+        const loc: any = v;
+        if (typeof loc.url === "string") loc.url = redactSecrets(redactUrl(loc.url));
+        if (typeof loc.stack === "string") loc.stack = redactSecrets(loc.stack);
+      }
+    }
+    // For broken-image images array, redact src
+    if (Array.isArray((copy as any).images)) {
+      (copy as any).images = (copy as any).images.map((img: any) => {
+        if (img && typeof img.src === "string") return { ...img, src: redactSecrets(redactUrl(img.src)) };
+        return img;
+      });
+    }
+    details = copy;
+  }
+  return { ...f, message: msg, details };
 }
 
 function buildAnnotationBoxes(findings: Finding[]): { boxes: AnnotationBox[] } {
@@ -264,6 +293,7 @@ async function removeAnnotations(page: Page): Promise<void> {
 export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
   const urlRaw = normalizeUrl(opts.url);
   const url = redactUrl(urlRaw); // redacted for artifacts
+  const urlForNavigation = urlRaw; // raw for actual fetch, preserves credentials/tokens needed to fetch
   const viewports = opts.viewports ?? VIEWPORTS;
   const outDir = opts.outDir;
   assertSafeOutDir(outDir);
@@ -338,7 +368,7 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
       });
 
       try {
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+        await page.goto(urlForNavigation, { waitUntil: "domcontentloaded", timeout: 15000 });
         await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
       } catch (e: any) {
         pageErrors.push({
@@ -384,13 +414,15 @@ export async function scanUrl(opts: ScanOptions): Promise<ScanReport> {
         }
       }
       // merge scenario failure findings + detection findings + a11y
-      const findings = [...scenarioFindings.map(f => ({ ...f })), ...rawFindings, ...a11yFindings];
+      const rawMerged = [...scenarioFindings.map(f => ({ ...f })), ...rawFindings, ...a11yFindings];
       // tag scenario name on all findings when scenario active
       if (scenario) {
-        for (const f of findings) {
+        for (const f of rawMerged) {
           if (!f.scenario) f.scenario = scenario.name;
         }
       }
+      // Redact secrets from messages and details before persistence — deterministic, no leakage
+      const findings = rawMerged.map(sanitizeFinding);
 
       const seen = new Set<string>();
       const deduped: Finding[] = [];
